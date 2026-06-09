@@ -87,6 +87,47 @@ void ProcessingThread(Overlay* overlay) {
             }
         }
 
+        // Check for still frame capture request
+        if (g_config.requestStillFrame) {
+            std::lock_guard<std::mutex> lock(overlay->GetD3DMutex());
+            // Capture a fresh frame
+            capture.CaptureFrame(desktopTexture);
+            if (desktopTexture) {
+                // Copy to Mat
+                capture.CaptureFullToMat(desktopTexture, overlay->m_stillFrameMat);
+
+                // Create ID3D11ShaderResourceView
+                D3D11_TEXTURE2D_DESC desc;
+                desktopTexture->GetDesc(&desc);
+                
+                D3D11_TEXTURE2D_DESC copyDesc = desc;
+                copyDesc.Usage = D3D11_USAGE_DEFAULT;
+                copyDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                copyDesc.CPUAccessFlags = 0;
+                copyDesc.MiscFlags = 0;
+
+                Microsoft::WRL::ComPtr<ID3D11Texture2D> stillTexture;
+                HRESULT hr = overlay->GetDevice()->CreateTexture2D(&copyDesc, nullptr, &stillTexture);
+                if (SUCCEEDED(hr)) {
+                    overlay->GetDeviceContext()->CopyResource(stillTexture.Get(), desktopTexture.Get());
+                    overlay->GetDeviceContext()->Flush();
+
+                    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Format = desc.Format;
+                    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MostDetailedMip = 0;
+                    srvDesc.Texture2D.MipLevels = 1;
+
+                    overlay->m_stillFrameSRV.Reset();
+                    hr = overlay->GetDevice()->CreateShaderResourceView(stillTexture.Get(), &srvDesc, &overlay->m_stillFrameSRV);
+                    if (SUCCEEDED(hr)) {
+                        overlay->m_stillFrameCaptured = true;
+                    }
+                }
+            }
+            g_config.requestStillFrame = false;
+        }
+
         // Frame Capture
         auto t0 = std::chrono::high_resolution_clock::now();
         bool newFrame = false;
@@ -461,6 +502,11 @@ int main() {
                 {
                     std::lock_guard<std::mutex> lockDets(g_detectionsMutex);
                     overlay.DrawDetections(g_detections, g_config);
+                }
+
+                // Render color picker overlay if active
+                if (g_config.colorPickerActive) {
+                    overlay.DrawColorPickerOverlay(g_config);
                 }
             }
 

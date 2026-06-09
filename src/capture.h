@@ -18,6 +18,9 @@ public:
     // Captures a cropped FOV region from the srcTexture directly to an OpenCV Mat
     bool CaptureFovToMat(Microsoft::WRL::ComPtr<ID3D11Texture2D>& srcTexture, int fovSize, cv::Mat& outMat);
 
+    // Captures the full screen frame from srcTexture to an OpenCV Mat
+    bool CaptureFullToMat(Microsoft::WRL::ComPtr<ID3D11Texture2D>& srcTexture, cv::Mat& outMat);
+
     int GetWidth() const { return m_width; }
     int GetHeight() const { return m_height; }
 

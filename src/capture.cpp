@@ -195,3 +195,46 @@ bool DXGICapture::CaptureFovToMat(Microsoft::WRL::ComPtr<ID3D11Texture2D>& srcTe
     m_context->Unmap(m_stagingTexture.Get(), 0);
     return true;
 }
+
+bool DXGICapture::CaptureFullToMat(Microsoft::WRL::ComPtr<ID3D11Texture2D>& srcTexture, cv::Mat& outMat) {
+    if (!srcTexture) return false;
+
+    D3D11_TEXTURE2D_DESC srcDesc;
+    srcTexture->GetDesc(&srcDesc);
+
+    // Create a temporary staging texture for full screen copying
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> fullStaging;
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = srcDesc.Width;
+    desc.Height = srcDesc.Height;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = srcDesc.Format;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
+
+    HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &fullStaging);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to create full staging texture. HR = 0x" << std::hex << hr << "\n";
+        return false;
+    }
+
+    m_context->CopyResource(fullStaging.Get(), srcTexture.Get());
+    m_context->Flush();
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    hr = m_context->Map(fullStaging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) {
+        std::cerr << "Failed to map full staging texture. HR = 0x" << std::hex << hr << "\n";
+        return false;
+    }
+
+    cv::Mat tempMat(srcDesc.Height, srcDesc.Width, CV_8UC4, mapped.pData, mapped.RowPitch);
+    outMat = tempMat.clone(); // deep copy
+
+    m_context->Unmap(fullStaging.Get(), 0);
+    return true;
+}

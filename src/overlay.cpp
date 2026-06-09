@@ -147,9 +147,9 @@ void Overlay::UpdateClickThroughState() {
     LONG_PTR exStyle = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
     
     // Dynamic click-through:
-    // If ImGui wants the mouse (e.g. user is dragging/clicking a panel),
+    // If ImGui wants the mouse (e.g. user is dragging/clicking a panel) or the color picker is active,
     // we remove WS_EX_TRANSPARENT. Otherwise, we add it back so clicks fall through to the background.
-    if (io.WantCaptureMouse) {
+    if (io.WantCaptureMouse || m_stillFrameCaptured) {
         if (exStyle & WS_EX_TRANSPARENT) {
             SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_TRANSPARENT);
         }
@@ -293,6 +293,14 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
                 config.colorTargetG = static_cast<int>(targetColor[1] * 255.0f + 0.5f);
                 config.colorTargetB = static_cast<int>(targetColor[2] * 255.0f + 0.5f);
             }
+
+            ImGui::Dummy(ImVec2(0.0f, 3.0f));
+            if (ImGui::Button("Pick Color from Screen", ImVec2(-FLT_MIN, 28.0f))) {
+                config.requestStillFrame = true;
+                config.colorPickerActive = true;
+                m_stillFrameCaptured = false;
+            }
+            ImGui::Dummy(ImVec2(0.0f, 3.0f));
             
             ImGui::SliderInt("Color Tolerance", &config.colorTolerance, 0, 100);
             ImGui::SliderInt("Min Target Area", &config.colorMinArea, 5, 500);
@@ -561,4 +569,141 @@ void Overlay::CreateRenderTarget() {
 
 void Overlay::CleanupRenderTarget() {
     m_mainRenderTargetView.Reset();
+}
+
+void Overlay::DrawColorPickerOverlay(AppConfig& config) {
+    if (!config.colorPickerActive) return;
+
+    if (!m_stillFrameCaptured) {
+        // Draw a neat centered status overlay while capturing
+        ImGui::SetNextWindowPos(ImVec2((m_screenWidth - 300) * 0.5f, (m_screenHeight - 80) * 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(300, 80));
+        ImGui::Begin("##CapturingPicker", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::Text("Taking still frame...");
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.38f, 0.45f, 0.90f, 1.0f), "Please wait...");
+        ImGui::End();
+        return;
+    }
+
+    if (!m_stillFrameSRV) {
+        config.colorPickerActive = false;
+        m_stillFrameCaptured = false;
+        return;
+    }
+
+    // Escape cancels the operation
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        config.colorPickerActive = false;
+        m_stillFrameCaptured = false;
+        m_stillFrameSRV.Reset();
+        m_stillFrameMat.release();
+        return;
+    }
+
+    // Fullscreen borderless window to display the still image and capture clicks
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(m_screenWidth), static_cast<float>(m_screenHeight)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("##ColorPickerFullscreen", nullptr, 
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | 
+                 ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings | 
+                 ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+    // Draw the still image
+    ImGui::Image(reinterpret_cast<void*>(m_stillFrameSRV.Get()), ImVec2(static_cast<float>(m_screenWidth), static_cast<float>(m_screenHeight)));
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 mousePos = ImGui::GetMousePos();
+    int mx = static_cast<int>(mousePos.x);
+    int my = static_cast<int>(mousePos.y);
+
+    // Clamp coordinates to screen bounds for pixel querying
+    if (mx >= 0 && mx < m_screenWidth && my >= 0 && my < m_screenHeight && !m_stillFrameMat.empty()) {
+        cv::Vec4b centerPixel = m_stillFrameMat.at<cv::Vec4b>(my, mx);
+        unsigned char cb = centerPixel[0];
+        unsigned char cg = centerPixel[1];
+        unsigned char cr = centerPixel[2];
+
+        // Draw Magnifier
+        float boxW = 160.0f;
+        float boxH = 210.0f;
+        float magX = mousePos.x + 35.0f;
+        float magY = mousePos.y - 230.0f;
+
+        // Prevent magnifier from drawing offscreen
+        if (magX + boxW > m_screenWidth) magX = mousePos.x - boxW - 35.0f;
+        if (magY < 0.0f) magY = mousePos.y + 35.0f;
+
+        ImVec2 magMin(magX, magY);
+        ImVec2 magMax(magX + boxW, magY + boxH);
+
+        // Premium background and border for magnifier
+        DrawGlowRect(dl, magMin, magMax, ImVec4(0.38f, 0.45f, 0.90f, 1.0f), 8.0f, 0.35f, 4, 6.0f);
+        dl->AddRectFilled(magMin, magMax, ImGui::ColorConvertFloat4ToU32({0.09f, 0.09f, 0.12f, 0.95f}), 8.0f);
+        dl->AddRect(magMin, magMax, ImGui::ColorConvertFloat4ToU32({0.38f, 0.45f, 0.90f, 0.8f}), 8.0f, 0, 1.5f);
+
+        // Magnified grid size
+        const int gridSize = 9; // 9x9 pixels
+        float cellW = 140.0f / gridSize;
+        float cellH = 140.0f / gridSize;
+        ImVec2 gridStart(magMin.x + 10.0f, magMin.y + 10.0f);
+
+        // Draw pixel grid
+        for (int dy = -gridSize/2; dy <= gridSize/2; ++dy) {
+            for (int dx = -gridSize/2; dx <= gridSize/2; ++dx) {
+                int px = mx + dx;
+                int py = my + dy;
+                
+                // Clamp pixel coordinates
+                if (px < 0) px = 0;
+                if (py < 0) py = 0;
+                if (px >= m_screenWidth) px = m_screenWidth - 1;
+                if (py >= m_screenHeight) py = m_screenHeight - 1;
+
+                cv::Vec4b pix = m_stillFrameMat.at<cv::Vec4b>(py, px);
+                ImU32 cellColor = IM_COL32(pix[2], pix[1], pix[0], 255);
+
+                ImVec2 cellMin(gridStart.x + (dx + gridSize/2) * cellW, gridStart.y + (dy + gridSize/2) * cellH);
+                ImVec2 cellMax(cellMin.x + cellW, cellMin.y + cellH);
+
+                dl->AddRectFilled(cellMin, cellMax, cellColor);
+                
+                // Fine separator line between magnified cells
+                dl->AddRect(cellMin, cellMax, IM_COL32(45, 45, 60, 45), 0.0f, 0, 0.5f);
+            }
+        }
+
+        // Highlight targeted center pixel in grid
+        ImVec2 centerCellMin(gridStart.x + (gridSize/2) * cellW, gridStart.y + (gridSize/2) * cellH);
+        ImVec2 centerCellMax(centerCellMin.x + cellW, centerCellMin.y + cellH);
+        dl->AddRect(centerCellMin, centerCellMax, IM_COL32(255, 255, 255, 255), 0.0f, 0, 1.5f);
+        dl->AddRect({centerCellMin.x - 1, centerCellMin.y - 1}, {centerCellMax.x + 1, centerCellMax.y + 1}, IM_COL32(0, 0, 0, 255), 0.0f, 0, 0.75f);
+
+        // Render RGB / HEX / instruction text below grid
+        char rgbText[64];
+        sprintf_s(rgbText, "RGB: %d, %d, %d", cr, cg, cb);
+        char hexText[64];
+        sprintf_s(hexText, "HEX: #%02X%02X%02X", cr, cg, cb);
+
+        dl->AddText({magMin.x + 12.0f, magMin.y + 155.0f}, IM_COL32(240, 240, 250, 255), rgbText);
+        dl->AddText({magMin.x + 12.0f, magMin.y + 172.0f}, ImGui::ColorConvertFloat4ToU32({0.38f, 0.45f, 0.90f, 1.0f}), hexText);
+        dl->AddText({magMin.x + 12.0f, magMin.y + 190.0f}, IM_COL32(140, 145, 160, 255), "LClick to Pick. ESC to Exit");
+
+        // Set target color on left click
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            config.colorTargetR = cr;
+            config.colorTargetG = cg;
+            config.colorTargetB = cb;
+
+            config.colorPickerActive = false;
+            m_stillFrameCaptured = false;
+            m_stillFrameSRV.Reset();
+            m_stillFrameMat.release();
+        }
+    }
+
+    ImGui::End();
+    ImGui::PopStyleVar();
 }

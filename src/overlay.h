@@ -35,6 +35,10 @@ struct AppConfig {
     int hotkeyKey = VK_XBUTTON1;    // Mouse 4 by default
     bool isAimingActive = false;
 
+    // Color picker communication flags
+    bool requestStillFrame = false;
+    bool colorPickerActive = false;
+
     // Humanized Smoothing settings (copied from Blazestrike)
     bool aimbot_humanized = false;
     bool aimbot_relative = true;     // Relative mouse movement (Raw input) vs absolute
@@ -69,6 +73,7 @@ public:
     // UI Renders
     void DrawConfigPanel(AppConfig& config);
     void DrawDetections(const std::vector<Detection>& detections, const AppConfig& config);
+    void DrawColorPickerOverlay(AppConfig& config);
 
     ID3D11Device* GetDevice() { return m_pd3dDevice.Get(); }
     ID3D11DeviceContext* GetDeviceContext() { return m_pd3dDeviceContext.Get(); }
@@ -77,6 +82,11 @@ public:
 
     int GetWidth() const { return m_screenWidth; }
     int GetHeight() const { return m_screenHeight; }
+
+    // Color picker still frame storage
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_stillFrameSRV;
+    cv::Mat m_stillFrameMat;
+    bool m_stillFrameCaptured = false;
 
 private:
     std::mutex m_d3dMutex;
