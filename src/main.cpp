@@ -10,6 +10,7 @@
 #include "capture.h"
 #include "cuda_process.h"
 #include "detector.h"
+#include "config_io.h"
 
 // Threading and Synchronization
 std::atomic<bool> g_running{true};
@@ -476,13 +477,25 @@ int main() {
         return -1;
     }
 
-    // 2. Scan for ONNX models
+    // 2. Load persisted settings from config.ini (next to the exe), then scan models.
+    LoadConfig(g_config);
+
     g_config.availableModels = Detector::ScanModelsDir();
     if (!g_config.availableModels.empty()) {
-        g_config.selectedModelPath = g_config.availableModels[0];
+        // Honor the saved model if it still exists; otherwise fall back to the first.
+        bool savedStillExists = false;
+        for (const auto& path : g_config.availableModels) {
+            if (path == g_config.selectedModelPath) { savedStillExists = true; break; }
+        }
+        if (!savedStillExists) {
+            g_config.selectedModelPath = g_config.availableModels[0];
+        }
     } else {
         std::cout << "Warning: No .onnx models found in ./models. Please copy models into the folder.\n";
     }
+
+    // Snapshot of persisted settings; the UI loop saves whenever this diverges.
+    AppConfig lastSavedConfig = g_config;
 
     // 3. Launch background capture and processing thread
     std::thread procThread(ProcessingThread, &overlay);
@@ -533,6 +546,12 @@ int main() {
         // Present outside the mutex lock to synchronize with the monitor's native refresh rate (VSync)
         // without blocking the capture/processing thread.
         overlay.Present();
+
+        // Persist settings whenever the UI (or a toggle hotkey) changed them.
+        if (!SettingsEqual(g_config, lastSavedConfig)) {
+            SaveConfig(g_config);
+            lastSavedConfig = g_config;
+        }
     }
 
     // 5. Terminate and cleanup
