@@ -5,6 +5,8 @@
 #include <backends/imgui_impl_dx11.h>
 #include <dwmapi.h>
 #include <iostream>
+#include <cstdio>
+#include <cfloat>
 
 #pragma comment(lib, "dwmapi.lib")
 
@@ -363,6 +365,26 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
                 ImGui::TextDisabled("First load builds a GPU engine (minutes), then cached.");
                 ImGui::Unindent();
             }
+
+            // While a model loads, the processing thread is blocked in LoadModel. ORT exposes
+            // no build-progress callback, so this is an indeterminate (animated) bar plus an
+            // elapsed timer — enough feedback for the multi-minute TensorRT engine build.
+            static double buildStart = 0.0;
+            static bool wasBuilding = false;
+            if (config.engineBuilding) {
+                double now = ImGui::GetTime();
+                if (!wasBuilding) { buildStart = now; wasBuilding = true; }
+                int elapsed = (int)(now - buildStart);
+                char timeLabel[32];
+                snprintf(timeLabel, sizeof(timeLabel), "%02d:%02d elapsed", elapsed / 60, elapsed % 60);
+                ImGui::Dummy(ImVec2(0.0f, 2.0f));
+                ImGui::ProgressBar(-1.0f, ImVec2(-1.0f, 0.0f), timeLabel); // <0 = indeterminate
+                ImGui::TextWrapped("%s", config.useTensorRT
+                    ? "Building TensorRT engine for this model + GPU. First run only; do not close."
+                    : "Loading model...");
+            } else {
+                wasBuilding = false;
+            }
             ImGui::Unindent();
             ImGui::Dummy(ImVec2(0.0f, 5.0f));
         }
@@ -452,13 +474,48 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
     if (ImGui::CollapsingHeader("Telemetry & Diagnostics", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
         ImGui::Text("Overlay Framework FPS: %.1f", ImGui::GetIO().Framerate);
-        ImGui::Text("Direct Capture & Sync FPS: %.1f", config.actualFps);
-        ImGui::Text("  -> Capture: %.2f ms", config.captureTimeMs);
-        ImGui::Text("  -> Preprocess (CUDA): %.2f ms", config.preprocessTimeMs);
-        ImGui::Text("  -> Inference: %.2f ms", config.inferenceTimeMs);
+        // Telemetry values are raw per-frame samples and naturally jitter. The text overlays
+        // use an EMA so the number is legible; the plots show the raw history so the jitter is
+        // visible. All of this is display-only main-thread state — never touches g_config.
+        auto smooth = [](float& acc, float sample) -> float {
+            constexpr float alpha = 0.1f; // low-pass; lower = steadier, slower to react
+            acc = (acc <= 0.0f) ? sample : acc + alpha * (sample - acc);
+            return acc;
+        };
+        static float fpsAvg = 0.0f, capAvg = 0.0f, preAvg = 0.0f, infAvg = 0.0f;
+        smooth(fpsAvg, config.actualFps);
+        smooth(capAvg, config.captureTimeMs);
+        smooth(preAvg, config.preprocessTimeMs);
+        smooth(infAvg, config.inferenceTimeMs);
+
+        // Rolling raw-sample history feeding the sparkline plots (push-on-render ring buffers).
+        constexpr int kHist = 150;
+        struct Ring {
+            float v[kHist] = {};
+            int off = 0;
+            void push(float x) { v[off] = x; off = (off + 1) % kHist; }
+        };
+        static Ring fpsHist, capHist, preHist, infHist;
+        fpsHist.push(config.actualFps);
+        capHist.push(config.captureTimeMs);
+        preHist.push(config.preprocessTimeMs);
+        infHist.push(config.inferenceTimeMs);
+
         const char* backend = config.useTensorRT
             ? (config.trtFp16 ? "TensorRT (FP16)" : "TensorRT (FP32)") : "CUDA";
-        ImGui::Text("  -> Backend: %s", backend);
+        ImGui::Text("Backend: %s", backend);
+
+        // Full-width sparklines, y-axis anchored at 0 with auto max; current EMA value overlaid.
+        char ovl[48];
+        const ImVec2 plotSize(-1.0f, 45.0f);
+        snprintf(ovl, sizeof(ovl), "FPS: %.1f", fpsAvg);
+        ImGui::PlotLines("##fps", fpsHist.v, kHist, fpsHist.off, ovl, 0.0f, FLT_MAX, plotSize);
+        snprintf(ovl, sizeof(ovl), "Inference: %.2f ms", infAvg);
+        ImGui::PlotLines("##inf", infHist.v, kHist, infHist.off, ovl, 0.0f, FLT_MAX, plotSize);
+        snprintf(ovl, sizeof(ovl), "Preprocess (CUDA): %.2f ms", preAvg);
+        ImGui::PlotLines("##pre", preHist.v, kHist, preHist.off, ovl, 0.0f, FLT_MAX, plotSize);
+        snprintf(ovl, sizeof(ovl), "Capture: %.2f ms", capAvg);
+        ImGui::PlotLines("##cap", capHist.v, kHist, capHist.off, ovl, 0.0f, FLT_MAX, plotSize);
         ImGui::Unindent();
     }
 

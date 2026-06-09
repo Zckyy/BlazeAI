@@ -90,6 +90,21 @@ if(WIN32 AND ONNXRUNTIME_LIBRARIES)
     endif()
 endif()
 
+# Copy TensorRT runtime DLLs (optional backend) from the tracked third_party folder so the
+# "Use TensorRT" toggle survives a clean build. These are too large for git (see the README
+# in that folder for the pip command to re-fetch them); the build just skips them if absent.
+if(WIN32)
+    file(GLOB TENSORRT_DLLS "${CMAKE_SOURCE_DIR}/third_party/tensorrt/*.dll")
+    if(TENSORRT_DLLS)
+        add_custom_command(TARGET ScreenAnalysisTool POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${TENSORRT_DLLS}
+            $<TARGET_FILE_DIR:ScreenAnalysisTool>
+            COMMENT "Copying TensorRT DLLs to output directory"
+        )
+    endif()
+endif()
+
 # Link Libraries
 target_link_libraries(ScreenAnalysisTool PRIVATE
     ${OpenCV_LIBRARIES}

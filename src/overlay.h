@@ -57,6 +57,10 @@ struct AppConfig {
     float preprocessTimeMs = 0.0f;
     float inferenceTimeMs = 0.0f;
     float actualFps = 0.0f;
+
+    // Set by the processing thread while a model is loading (blocks for minutes when the
+    // TensorRT engine is being built); the UI shows an indeterminate progress bar meanwhile.
+    bool engineBuilding = false;
 };
 
 class Overlay {

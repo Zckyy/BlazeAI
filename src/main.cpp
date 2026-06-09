@@ -380,7 +380,12 @@ void ProcessingThread(Overlay* overlay) {
         bool backendChanged = (g_config.useTensorRT != loadedTensorRT) ||
                               (g_config.trtFp16 != loadedTrtFp16);
         if (!modelToLoad.empty() && (modelToLoad != loadedModelPath || backendChanged)) {
-            if (detector.LoadModel(modelToLoad, g_config.useTensorRT, g_config.trtFp16)) {
+            // Flag the (potentially multi-minute) load so the UI can show a progress bar.
+            // LoadModel blocks this thread; the UI keeps rendering on the main thread.
+            g_config.engineBuilding = true;
+            bool ok = detector.LoadModel(modelToLoad, g_config.useTensorRT, g_config.trtFp16);
+            g_config.engineBuilding = false;
+            if (ok) {
                 loadedModelPath = modelToLoad;
                 loadedTensorRT = g_config.useTensorRT;
                 loadedTrtFp16 = g_config.trtFp16;
