@@ -48,14 +48,10 @@ private:
     int m_inputHeight = 640;
     size_t m_inputTensorSize = 0;
 
+    // Input/output node names owned as std::string; .c_str() is passed to ORT at Detect() time.
     std::string m_inputName;
     std::string m_outputName;
 
-    // Allocated buffers for node name management
-    std::vector<char*> m_inputNamesAllocated;
-    std::vector<char*> m_outputNamesAllocated;
-    
     std::vector<std::string> m_classNames;
     void LoadDefaultClassNames();
-    void CleanupNames();
 };
