@@ -21,5 +21,12 @@ public:
     );
 
 private:
+    // Returns a CUDA texture object for the given array, reusing the cached one when the
+    // underlying array has not changed (avoids per-frame create/destroy overhead).
+    cudaTextureObject_t GetOrCreateTextureObject(cudaArray_t array);
+    void DestroyTextureObject();
+
     cudaGraphicsResource_t m_cudaResource = nullptr;
+    cudaTextureObject_t m_texObj = 0;
+    cudaArray_t m_cachedArray = nullptr;
 };

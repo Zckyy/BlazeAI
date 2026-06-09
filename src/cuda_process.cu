@@ -59,10 +59,47 @@ bool CUDAProcessor::RegisterTexture(ID3D11Texture2D* texture) {
 }
 
 void CUDAProcessor::UnregisterTexture() {
+    DestroyTextureObject();
     if (m_cudaResource) {
         cudaGraphicsUnregisterResource(m_cudaResource);
         m_cudaResource = nullptr;
     }
+}
+
+void CUDAProcessor::DestroyTextureObject() {
+    if (m_texObj) {
+        cudaDestroyTextureObject(m_texObj);
+        m_texObj = 0;
+    }
+    m_cachedArray = nullptr;
+}
+
+cudaTextureObject_t CUDAProcessor::GetOrCreateTextureObject(cudaArray_t array) {
+    // Reuse the cached texture object as long as the mapped array is identical.
+    if (m_texObj && m_cachedArray == array) {
+        return m_texObj;
+    }
+    DestroyTextureObject();
+
+    struct cudaResourceDesc resDesc = {};
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = array;
+
+    struct cudaTextureDesc texDesc = {};
+    texDesc.addressMode[0] = cudaAddressModeClamp;
+    texDesc.addressMode[1] = cudaAddressModeClamp;
+    texDesc.filterMode = cudaFilterModeLinear;       // Bilinear filtering for smooth resize
+    texDesc.readMode = cudaReadModeNormalizedFloat;  // Auto normalize uchar to [0.0f, 1.0f]
+    texDesc.normalizedCoords = 0;                    // Use pixel coordinates
+
+    cudaError_t err = cudaCreateTextureObject(&m_texObj, &resDesc, &texDesc, nullptr);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to create texture object: " << cudaGetErrorString(err) << "\n";
+        m_texObj = 0;
+        return 0;
+    }
+    m_cachedArray = array;
+    return m_texObj;
 }
 
 bool CUDAProcessor::ProcessFrame(
@@ -92,24 +129,9 @@ bool CUDAProcessor::ProcessFrame(
         return false;
     }
 
-    // Configure texture object resource description
-    struct cudaResourceDesc resDesc = {};
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = cuArray;
-
-    // Configure texture object description
-    struct cudaTextureDesc texDesc = {};
-    texDesc.addressMode[0] = cudaAddressModeClamp;
-    texDesc.addressMode[1] = cudaAddressModeClamp;
-    texDesc.filterMode = cudaFilterModeLinear; // Bilinear filtering for smooth resize
-    texDesc.readMode = cudaReadModeNormalizedFloat; // Auto normalize uchar to [0.0f, 1.0f]
-    texDesc.normalizedCoords = 0; // Use pixel coordinates
-
-    // Create texture object
-    cudaTextureObject_t texObj = 0;
-    err = cudaCreateTextureObject(&texObj, &resDesc, &texDesc, nullptr);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to create texture object: " << cudaGetErrorString(err) << "\n";
+    // Get (or reuse) the texture object bound to this mapped array
+    cudaTextureObject_t texObj = GetOrCreateTextureObject(cuArray);
+    if (!texObj) {
         cudaGraphicsUnmapResources(1, &m_cudaResource, stream);
         return false;
     }
@@ -136,8 +158,8 @@ bool CUDAProcessor::ProcessFrame(
         std::cerr << "Kernel launch failed: " << cudaGetErrorString(err) << "\n";
     }
 
-    // Cleanup
-    cudaDestroyTextureObject(texObj);
+    // Unmap the graphics resource. The texture object is cached and reused next frame
+    // (it stays valid because the registered D3D texture is not recreated per frame).
     cudaGraphicsUnmapResources(1, &m_cudaResource, stream);
 
     return (err == cudaSuccess);
