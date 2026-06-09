@@ -1,0 +1,59 @@
+# Build output
+build/
+out/
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+*.ilk
+*.exp
+
+# VCPKG build artifacts (keep vcpkg.json / vcpkg-configuration.json if present)
+vcpkg/buildtrees/
+vcpkg/downloads/
+vcpkg/installed/
+vcpkg/packages/
+
+# CMake cache and generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# ONNX models (large binary files — distribute separately)
+models/
+*.onnx
+
+# Visual Studio / MSVC
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+ipch/
+x64/
+x86/
+Debug/
+Release/
+
+# CLion / JetBrains
+.idea/
+cmake-build-*/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs
+*.log

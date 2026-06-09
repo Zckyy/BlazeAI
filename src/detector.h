@@ -1,0 +1,61 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include <onnxruntime_cxx_api.h>
+#include <opencv2/opencv.hpp>
+
+struct Detection {
+    cv::Rect box;       // Bounding box in absolute screen coordinates
+    float confidence;
+    int classId;
+    std::string label;
+};
+
+class Detector {
+public:
+    Detector();
+    ~Detector();
+
+    // Scans ./models folder relative to executable for .onnx files
+    static std::vector<std::wstring> ScanModelsDir();
+
+    // Loads the selected model using ONNX Runtime with CUDA EP
+    bool LoadModel(const std::wstring& modelPath);
+    bool IsLoaded() const { return m_session != nullptr; }
+
+    // Runs inference on the CUDA device pointer, parses outputs (YOLOv5/v8 auto-detect), and runs NMS
+    bool Detect(
+        float* d_inputBuffer, 
+        int desktopWidth, int desktopHeight, 
+        int fovSize,
+        float confThreshold, 
+        std::vector<Detection>& outDetections
+    );
+
+    int GetInputWidth() const { return m_inputWidth; }
+    int GetInputHeight() const { return m_inputHeight; }
+    const std::wstring& GetCurrentModelName() const { return m_currentModelName; }
+
+private:
+    Ort::Env m_env;
+    std::unique_ptr<Ort::Session> m_session;
+    
+    std::wstring m_currentModelName;
+
+    std::vector<int64_t> m_inputDims;
+    int m_inputWidth = 640;
+    int m_inputHeight = 640;
+    size_t m_inputTensorSize = 0;
+
+    std::string m_inputName;
+    std::string m_outputName;
+
+    // Allocated buffers for node name management
+    std::vector<char*> m_inputNamesAllocated;
+    std::vector<char*> m_outputNamesAllocated;
+    
+    std::vector<std::string> m_classNames;
+    void LoadDefaultClassNames();
+    void CleanupNames();
+};
