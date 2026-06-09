@@ -482,6 +482,7 @@ int main() {
 
     // 4. GUI Window Loop
     static bool deletePressedLast = false;
+    static bool insertPressedLast = false;
     while (overlay.ProcessMessages()) {
         // Toggle visuals toggle hotkey (Delete Key)
         bool deletePressed = (GetAsyncKeyState(VK_DELETE) & 0x8000) != 0;
@@ -490,13 +491,22 @@ int main() {
         }
         deletePressedLast = deletePressed;
 
+        // Toggle the ImGui config menu (Insert Key)
+        bool insertPressed = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
+        if (insertPressed && !insertPressedLast) {
+            g_config.showMenu = !g_config.showMenu;
+        }
+        insertPressedLast = insertPressed;
+
         {
             std::lock_guard<std::mutex> lock(overlay.GetD3DMutex());
             overlay.BeginFrame();
 
             if (g_config.showVisuals) {
-                // Render configuration panel
-                overlay.DrawConfigPanel(g_config);
+                // Render configuration panel (toggled by Insert)
+                if (g_config.showMenu) {
+                    overlay.DrawConfigPanel(g_config);
+                }
 
                 // Fetch and draw detection boxes safely
                 {

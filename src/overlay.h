@@ -32,6 +32,7 @@ struct AppConfig {
     bool autoAim = true;
     bool showBoundingBoxes = true;
     bool showVisuals = true;
+    bool showMenu = true;           // ImGui config panel visibility (Insert toggles)
     int hotkeyKey = VK_XBUTTON1;    // Mouse 4 by default
     bool isAimingActive = false;
 
