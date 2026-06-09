@@ -364,6 +364,8 @@ void ProcessingThread(Overlay* overlay) {
     Microsoft::WRL::ComPtr<ID3D11Texture2D> desktopTexture;
     bool textureRegistered = false;
     std::wstring loadedModelPath = L"";
+    bool loadedTensorRT = false;
+    bool loadedTrtFp16 = true;
 
     // Track frame rate metrics
     auto lastFpsTime = std::chrono::high_resolution_clock::now();
@@ -372,11 +374,16 @@ void ProcessingThread(Overlay* overlay) {
     while (g_running) {
         auto loopStart = std::chrono::high_resolution_clock::now();
 
-        // Dynamically load selected model if changed
+        // (Re)load the model when the selection or the TensorRT backend settings change.
+        // Switching backend rebuilds the session, so the TRT engine build cost is paid here.
         std::wstring modelToLoad = g_config.selectedModelPath;
-        if (!modelToLoad.empty() && modelToLoad != loadedModelPath) {
-            if (detector.LoadModel(modelToLoad)) {
+        bool backendChanged = (g_config.useTensorRT != loadedTensorRT) ||
+                              (g_config.trtFp16 != loadedTrtFp16);
+        if (!modelToLoad.empty() && (modelToLoad != loadedModelPath || backendChanged)) {
+            if (detector.LoadModel(modelToLoad, g_config.useTensorRT, g_config.trtFp16)) {
                 loadedModelPath = modelToLoad;
+                loadedTensorRT = g_config.useTensorRT;
+                loadedTrtFp16 = g_config.trtFp16;
             }
         }
 

@@ -352,6 +352,17 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
                     config.selectedModelPath = L"";
                 }
             }
+
+            // Backend acceleration. Toggling either of these triggers a model reload on the
+            // processing thread; the first TensorRT build can take several minutes (cached after).
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::Checkbox("Use TensorRT (faster, first load is slow)", &config.useTensorRT);
+            if (config.useTensorRT) {
+                ImGui::Indent();
+                ImGui::Checkbox("FP16 (recommended)", &config.trtFp16);
+                ImGui::TextDisabled("First load builds a GPU engine (minutes), then cached.");
+                ImGui::Unindent();
+            }
             ImGui::Unindent();
             ImGui::Dummy(ImVec2(0.0f, 5.0f));
         }
@@ -445,6 +456,9 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         ImGui::Text("  -> Capture: %.2f ms", config.captureTimeMs);
         ImGui::Text("  -> Preprocess (CUDA): %.2f ms", config.preprocessTimeMs);
         ImGui::Text("  -> Inference: %.2f ms", config.inferenceTimeMs);
+        const char* backend = config.useTensorRT
+            ? (config.trtFp16 ? "TensorRT (FP16)" : "TensorRT (FP32)") : "CUDA";
+        ImGui::Text("  -> Backend: %s", backend);
         ImGui::Unindent();
     }
 

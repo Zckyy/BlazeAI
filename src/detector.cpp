@@ -33,15 +33,56 @@ std::vector<std::wstring> Detector::ScanModelsDir() {
     return models;
 }
 
-bool Detector::LoadModel(const std::wstring& modelPath) {
+bool Detector::LoadModel(const std::wstring& modelPath, bool useTensorRT, bool trtFp16) {
     try {
         m_session.reset();
+        m_activeBackend = "None";
 
         Ort::SessionOptions sessionOptions;
         sessionOptions.SetIntraOpNumThreads(1);
         sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
-        // Try to enable CUDA EP
+        // EP precedence: ORT tries providers in append order. TensorRT (when enabled) takes
+        // what it can compile; CUDA handles any unsupported nodes; CPU is the final fallback.
+        // The cache-path string must outlive the AppendExecutionProvider call below, so keep
+        // it in this function-scoped std::string (the session is created before we return).
+        std::string trtCachePath;
+
+        // Try to enable the TensorRT EP first (the only path with real INT8/FP16 kernels).
+        if (useTensorRT) {
+            try {
+                // Engine cache lives next to the executable so the slow first-run build
+                // (minutes) is reused on subsequent launches for the same model/GPU/driver.
+                wchar_t exePath[MAX_PATH];
+                GetModuleFileNameW(NULL, exePath, MAX_PATH);
+                std::filesystem::path cacheDir =
+                    std::filesystem::path(exePath).parent_path() / "trt_engine_cache";
+                std::filesystem::create_directories(cacheDir);
+                trtCachePath = cacheDir.string();
+
+                OrtTensorRTProviderOptions trtOptions{}; // zero-init: many fields, defaults are 0
+                trtOptions.device_id = 0;
+                // These two must be positive; leaving them at the {}-zero makes ORT warn and
+                // fall back to these same defaults, so set them explicitly to stay quiet.
+                trtOptions.trt_max_partition_iterations = 1000;
+                trtOptions.trt_min_subgraph_size = 1;
+                trtOptions.trt_fp16_enable = trtFp16 ? 1 : 0;
+                trtOptions.trt_engine_cache_enable = 1;
+                trtOptions.trt_engine_cache_path = trtCachePath.c_str();
+                sessionOptions.AppendExecutionProvider_TensorRT(trtOptions);
+
+                m_activeBackend = trtFp16 ? "TensorRT (FP16)" : "TensorRT (FP32)";
+                std::cout << "Enabled TensorRT EP (" << m_activeBackend
+                          << "). First load may take several minutes to build the engine; "
+                          << "subsequent loads use the cache at " << trtCachePath << ".\n";
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to enable TensorRT EP: " << e.what()
+                          << ". Falling back to CUDA.\n";
+            }
+        }
+
+        // Try to enable CUDA EP (fallback for TRT-unsupported nodes, or primary when TRT off)
         try {
             OrtCUDAProviderOptions cudaOptions;
             cudaOptions.device_id = 0;
@@ -50,10 +91,12 @@ bool Detector::LoadModel(const std::wstring& modelPath) {
             cudaOptions.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
             cudaOptions.do_copy_in_default_stream = 1;
             sessionOptions.AppendExecutionProvider_CUDA(cudaOptions);
+            if (m_activeBackend == "None") m_activeBackend = "CUDA";
             std::cout << "Successfully enabled CUDA Execution Provider for ONNX Runtime.\n";
         }
         catch (const std::exception& e) {
             std::cerr << "Failed to enable CUDA EP: " << e.what() << ". Falling back to CPU.\n";
+            if (m_activeBackend == "None") m_activeBackend = "CPU";
         }
 
         m_session = std::make_unique<Ort::Session>(m_env, modelPath.c_str(), sessionOptions);

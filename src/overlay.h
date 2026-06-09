@@ -25,6 +25,9 @@ struct AppConfig {
     int colorTolerance = 5; // Start with a strict default tolerance
     int colorMinArea = 15;
     
+    bool useTensorRT = false;       // Use TensorRT EP (faster) instead of plain CUDA EP
+    bool trtFp16 = true;            // FP16 ("medium numbers") when TensorRT is on; big free win
+
     int fovSize = 120;              // 320 or 640
     int targetFps = 170;            // 1 to 400
     int maxDetections = 5;

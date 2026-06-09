@@ -49,6 +49,9 @@ void SaveConfig(const AppConfig& config) {
     f << "colorTolerance=" << config.colorTolerance << "\n";
     f << "colorMinArea=" << config.colorMinArea << "\n";
 
+    f << "useTensorRT=" << (config.useTensorRT ? 1 : 0) << "\n";
+    f << "trtFp16=" << (config.trtFp16 ? 1 : 0) << "\n";
+
     f << "fovSize=" << config.fovSize << "\n";
     f << "targetFps=" << config.targetFps << "\n";
     f << "maxDetections=" << config.maxDetections << "\n";
@@ -114,6 +117,9 @@ void LoadConfig(AppConfig& config) {
     getInt("colorTolerance", config.colorTolerance);
     getInt("colorMinArea", config.colorMinArea);
 
+    getBool("useTensorRT", config.useTensorRT);
+    getBool("trtFp16", config.trtFp16);
+
     getInt("fovSize", config.fovSize);
     getInt("targetFps", config.targetFps);
     getInt("maxDetections", config.maxDetections);
@@ -145,6 +151,8 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.colorTargetB == b.colorTargetB
         && a.colorTolerance == b.colorTolerance
         && a.colorMinArea == b.colorMinArea
+        && a.useTensorRT == b.useTensorRT
+        && a.trtFp16 == b.trtFp16
         && a.fovSize == b.fovSize
         && a.targetFps == b.targetFps
         && a.maxDetections == b.maxDetections

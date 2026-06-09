@@ -20,9 +20,14 @@ public:
     // Scans ./models folder relative to executable for .onnx files
     static std::vector<std::wstring> ScanModelsDir();
 
-    // Loads the selected model using ONNX Runtime with CUDA EP
-    bool LoadModel(const std::wstring& modelPath);
+    // Loads the selected model using ONNX Runtime. When useTensorRT is set, the TensorRT
+    // execution provider is appended ahead of CUDA (FP16 optional), with an on-disk engine
+    // cache so the multi-minute engine build only happens once per model/GPU/driver combo.
+    bool LoadModel(const std::wstring& modelPath, bool useTensorRT = false, bool trtFp16 = true);
     bool IsLoaded() const { return m_session != nullptr; }
+
+    // Which backend the currently loaded session actually built with (for telemetry/UI).
+    const std::string& GetActiveBackend() const { return m_activeBackend; }
 
     // Runs inference on the CUDA device pointer, parses outputs (YOLOv5/v8 auto-detect), and runs NMS
     bool Detect(
@@ -42,6 +47,7 @@ private:
     std::unique_ptr<Ort::Session> m_session;
     
     std::wstring m_currentModelName;
+    std::string m_activeBackend = "None";
 
     std::vector<int64_t> m_inputDims;
     int m_inputWidth = 640;
