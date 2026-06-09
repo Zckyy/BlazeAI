@@ -7,21 +7,7 @@ Detector::Detector() {
     LoadDefaultClassNames();
 }
 
-Detector::~Detector() {
-    CleanupNames();
-}
-
-void Detector::CleanupNames() {
-    for (char* name : m_inputNamesAllocated) {
-        delete[] name;
-    }
-    m_inputNamesAllocated.clear();
-
-    for (char* name : m_outputNamesAllocated) {
-        delete[] name;
-    }
-    m_outputNamesAllocated.clear();
-}
+Detector::~Detector() = default;
 
 std::vector<std::wstring> Detector::ScanModelsDir() {
     std::vector<std::wstring> models;
@@ -50,7 +36,6 @@ std::vector<std::wstring> Detector::ScanModelsDir() {
 bool Detector::LoadModel(const std::wstring& modelPath) {
     try {
         m_session.reset();
-        CleanupNames();
 
         Ort::SessionOptions sessionOptions;
         sessionOptions.SetIntraOpNumThreads(1);
@@ -82,13 +67,7 @@ bool Detector::LoadModel(const std::wstring& modelPath) {
         // Input details
         size_t numInputNodes = m_session->GetInputCount();
         if (numInputNodes > 0) {
-            auto inputNameAllocated = m_session->GetInputNameAllocated(0, allocator);
-            m_inputName = inputNameAllocated.get();
-            
-            // Safe copy for persistence
-            char* nameCopy = new char[m_inputName.size() + 1];
-            strcpy(nameCopy, m_inputName.c_str());
-            m_inputNamesAllocated.push_back(nameCopy);
+            m_inputName = m_session->GetInputNameAllocated(0, allocator).get();
 
             Ort::TypeInfo typeInfo = m_session->GetInputTypeInfo(0);
             auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
@@ -103,12 +82,7 @@ bool Detector::LoadModel(const std::wstring& modelPath) {
         // Output details
         size_t numOutputNodes = m_session->GetOutputCount();
         if (numOutputNodes > 0) {
-            auto outputNameAllocated = m_session->GetOutputNameAllocated(0, allocator);
-            m_outputName = outputNameAllocated.get();
-
-            char* nameCopy = new char[m_outputName.size() + 1];
-            strcpy(nameCopy, m_outputName.c_str());
-            m_outputNamesAllocated.push_back(nameCopy);
+            m_outputName = m_session->GetOutputNameAllocated(0, allocator).get();
         }
 
         std::wcout << L"Successfully loaded model: " << m_currentModelName 
@@ -148,8 +122,8 @@ bool Detector::Detect(
             m_inputDims.size()
         );
 
-        const char* inputNames[] = { m_inputNamesAllocated[0] };
-        const char* outputNames[] = { m_outputNamesAllocated[0] };
+        const char* inputNames[] = { m_inputName.c_str() };
+        const char* outputNames[] = { m_outputName.c_str() };
 
         // Run inference
         auto outputTensors = m_session->Run(
