@@ -161,6 +161,26 @@ void Overlay::UpdateClickThroughState() {
             SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
         }
     }
+
+    // Keyboard focus: WM_CHAR/WM_KEYDOWN only reach the *focused* window, but the overlay
+    // is WS_EX_NOACTIVATE so it normally never gets focus — that's why typing into ImGui
+    // text fields (e.g. the color RGB inputs) did nothing. While ImGui wants text input we
+    // strip NOACTIVATE and pull the overlay to the foreground so keystrokes route to it;
+    // once editing ends we restore NOACTIVATE so the game keeps focus and hotkeys work.
+    static bool s_hadTextFocus = false;
+    if (io.WantTextInput) {
+        if (!s_hadTextFocus) {
+            exStyle = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
+            SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
+            SetForegroundWindow(m_hwnd);
+            SetFocus(m_hwnd);
+            s_hadTextFocus = true;
+        }
+    } else if (s_hadTextFocus) {
+        exStyle = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
+        SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+        s_hadTextFocus = false;
+    }
 }
 
 void Overlay::BeginFrame() {
