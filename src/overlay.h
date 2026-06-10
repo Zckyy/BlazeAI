@@ -15,7 +15,8 @@ enum VisionMode {
 
 enum MouseInputMethod {
     MOUSE_SENDINPUT = 0,     // Standard SendInput (works almost everywhere)
-    MOUSE_NTUSERINJECT = 1   // NtUserInjectMouseInput via win32u.dll (relative-only)
+    MOUSE_NTUSERINJECT = 1,  // NtUserInjectMouseInput via win32u.dll (relative-only)
+    MOUSE_MAKCU = 2          // External MAKCU serial device (relative-only, hardware-level)
 };
 
 // Configuration struct shared between overlay and loop

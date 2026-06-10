@@ -1,4 +1,5 @@
 #include "overlay.h"
+#include "makcu.h"
 #include <filesystem>
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
@@ -454,10 +455,60 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         if (config.aimbot_relative) {
             ImGui::SliderFloat("Relative Sensitivity Scale", &config.aimbot_sensitivity, 0.1f, 5.0f, "%.2f");
 
-            const char* methodNames[] = { "SendInput", "NtUserInjectMouseInput (win32u)" };
+            const char* methodNames[] = { "SendInput", "NtUserInjectMouseInput (win32u)", "MAKCU (Serial)" };
             int method = config.mouseInputMethod;
             if (ImGui::Combo("Mouse Injection Method", &method, methodNames, IM_ARRAYSIZE(methodNames))) {
                 config.mouseInputMethod = method;
+            }
+
+            // MAKCU device configuration: only shown when the serial backend is selected.
+            if (config.mouseInputMethod == MOUSE_MAKCU) {
+                ImGui::Separator();
+                ImGui::TextUnformatted("MAKCU Connection");
+                ImGui::Indent();
+
+                // COM-port list is cached and only rescanned on Refresh (QueryDosDevice
+                // sweeps 256 names, too heavy to run every frame).
+                static std::vector<std::string> ports = MakcuInput::EnumPorts();
+                static int portIdx = -1;
+                if (portIdx < 0) {
+                    // Default the selection to whatever is currently connected, if anything.
+                    for (size_t i = 0; i < ports.size(); ++i) {
+                        if (ports[i] == g_makcu.CurrentPort()) { portIdx = static_cast<int>(i); break; }
+                    }
+                }
+
+                std::string preview = (portIdx >= 0 && portIdx < (int)ports.size()) ? ports[portIdx] : "Select COM port";
+                if (ImGui::BeginCombo("COM Port", preview.c_str())) {
+                    for (int i = 0; i < (int)ports.size(); ++i) {
+                        bool selected = (i == portIdx);
+                        if (ImGui::Selectable(ports[i].c_str(), selected)) {
+                            portIdx = i;
+                            // Auto-connect on selection — no explicit connect button.
+                            g_makcu.Connect(ports[i]);
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Refresh")) {
+                    ports = MakcuInput::EnumPorts();
+                    portIdx = -1; // re-resolve against current connection next frame
+                }
+
+                if (g_makcu.IsConnected()) {
+                    ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f),
+                                       "Connected on %s", g_makcu.CurrentPort().c_str());
+                    if (ImGui::Button("Test Movement")) {
+                        g_makcu.MoveRelative(50, 0); // nudge 50px right as a visible probe
+                    }
+                } else {
+                    ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "Not connected");
+                }
+
+                ImGui::Unindent();
             }
         }
         

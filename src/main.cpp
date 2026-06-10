@@ -12,6 +12,7 @@
 #include "detector.h"
 #include "config_io.h"
 #include "input.h"
+#include "makcu.h"
 
 // Threading and Synchronization
 std::atomic<bool> g_running{true};
@@ -46,6 +47,11 @@ void MoveMouseTo(int x, int y) {
 void MoveMouseRelative(int dx, int dy) {
     if (g_config.mouseInputMethod == MOUSE_NTUSERINJECT && g_ntInput.Available()) {
         g_ntInput.MoveRelative(dx, dy);
+        return;
+    }
+
+    if (g_config.mouseInputMethod == MOUSE_MAKCU && g_makcu.IsConnected()) {
+        g_makcu.MoveRelative(dx, dy);
         return;
     }
 
