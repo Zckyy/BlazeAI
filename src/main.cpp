@@ -11,6 +11,7 @@
 #include "cuda_process.h"
 #include "detector.h"
 #include "config_io.h"
+#include "input.h"
 
 // Threading and Synchronization
 std::atomic<bool> g_running{true};
@@ -43,6 +44,11 @@ void MoveMouseTo(int x, int y) {
 
 // Relative mouse movement helper (ideal for 3D/FPS games)
 void MoveMouseRelative(int dx, int dy) {
+    if (g_config.mouseInputMethod == MOUSE_NTUSERINJECT && g_ntInput.Available()) {
+        g_ntInput.MoveRelative(dx, dy);
+        return;
+    }
+
     INPUT input = { 0 };
     input.type = INPUT_MOUSE;
     input.mi.dx = static_cast<LONG>(dx);

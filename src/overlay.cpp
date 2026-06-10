@@ -453,6 +453,12 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         ImGui::Checkbox("Relative Mouse Input (for 3D/FPS)", &config.aimbot_relative);
         if (config.aimbot_relative) {
             ImGui::SliderFloat("Relative Sensitivity Scale", &config.aimbot_sensitivity, 0.1f, 5.0f, "%.2f");
+
+            const char* methodNames[] = { "SendInput", "NtUserInjectMouseInput (win32u)" };
+            int method = config.mouseInputMethod;
+            if (ImGui::Combo("Mouse Injection Method", &method, methodNames, IM_ARRAYSIZE(methodNames))) {
+                config.mouseInputMethod = method;
+            }
         }
         
         ImGui::Separator();

@@ -13,6 +13,11 @@ enum VisionMode {
     COLOR_VISION = 1
 };
 
+enum MouseInputMethod {
+    MOUSE_SENDINPUT = 0,     // Standard SendInput (works almost everywhere)
+    MOUSE_NTUSERINJECT = 1   // NtUserInjectMouseInput via win32u.dll (relative-only)
+};
+
 // Configuration struct shared between overlay and loop
 struct AppConfig {
     std::wstring selectedModelPath;
@@ -46,6 +51,7 @@ struct AppConfig {
     // Humanized Smoothing settings (copied from Blazestrike)
     bool aimbot_humanized = false;
     bool aimbot_relative = true;     // Relative mouse movement (Raw input) vs absolute
+    int mouseInputMethod = MOUSE_SENDINPUT; // How relative moves are injected (see MouseInputMethod)
     float aimbot_sensitivity = 1.0f; // Scale factor for relative movement
     float aimbot_smooth = 2.0f;
     float aimbot_jitter = 0.0f;
