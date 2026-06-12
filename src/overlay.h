@@ -82,6 +82,13 @@ struct AppConfig {
     float aimbot_ease_in = 0.15f;
     float aimbot_ease_out = 0.35f;
 
+    // Trigger bot: while the aim hotkey is held and the locked target's aim point is
+    // within `triggerBotRadius` pixels of the crosshair, automatically fires a left click.
+    bool triggerBotEnabled = false;
+    float triggerBotRadius = 5.0f;   // Max crosshair-to-target distance (px) to fire
+    int triggerBotHoldMs = 50;       // How long the click is held down
+    int triggerBotCooldownMs = 100;  // Minimum gap between clicks
+
     float captureTimeMs = 0.0f;
     float preprocessTimeMs = 0.0f;
     float inferenceTimeMs = 0.0f;

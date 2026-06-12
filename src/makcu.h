@@ -101,6 +101,13 @@ public:
         WriteLocked(cmd, n);
     }
 
+    // Left mouse button press/release.
+    void Click(bool down) {
+        if (!m_connected) return;
+        std::lock_guard<std::mutex> lock(m_writeMutex);
+        WriteLocked(down ? "km.left(1)\r\n" : "km.left(0)\r\n");
+    }
+
 private:
     // Apply a baud rate + 8N1 + non-blocking timeouts to the open handle.
     bool ConfigureBaud(unsigned int baud) {

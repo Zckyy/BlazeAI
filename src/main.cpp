@@ -64,6 +64,24 @@ void MoveMouseRelative(int dx, int dy) {
     SendInput(1, &input, sizeof(INPUT));
 }
 
+// Presses or releases the left mouse button via the configured input method.
+void SetMouseButton(bool down) {
+    if (g_config.mouseInputMethod == MOUSE_NTUSERINJECT && g_ntInput.Available()) {
+        g_ntInput.Click(down);
+        return;
+    }
+
+    if (g_config.mouseInputMethod == MOUSE_MAKCU && g_makcu.IsConnected()) {
+        g_makcu.Click(down);
+        return;
+    }
+
+    INPUT input = { 0 };
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
+    SendInput(1, &input, sizeof(INPUT));
+}
+
 // Persistent state for the humanized aim-assist controller, carried across frames.
 struct AimState {
     bool  wasAiming      = false;
@@ -74,6 +92,11 @@ struct AimState {
     int   lastTargetX    = -1;
     int   lastTargetY    = -1;
     int   lockedTrackId  = -1; // Track the aim is currently committed to (-1 = none)
+
+    // Trigger bot state
+    bool triggerHeld = false;
+    std::chrono::steady_clock::time_point triggerPressTime;
+    std::chrono::steady_clock::time_point triggerLastFireTime;
 };
 
 // Captures a fresh full-screen still frame into the overlay for the color picker tool.
@@ -207,6 +230,32 @@ static bool RunAiVision(DXGICapture& capture, CUDAProcessor& cudaProc, Detector&
     return true;
 }
 
+// Drives the trigger bot button state. `wantFire` is true when conditions to fire are
+// currently met (hotkey held, target locked, within trigger radius). Handles press,
+// timed release (triggerBotHoldMs), and cooldown between shots (triggerBotCooldownMs).
+static void UpdateTriggerBot(AimState& s, bool wantFire) {
+    const auto now = std::chrono::steady_clock::now();
+
+    if (s.triggerHeld) {
+        auto heldMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - s.triggerPressTime).count();
+        if (heldMs >= g_config.triggerBotHoldMs) {
+            SetMouseButton(false);
+            s.triggerHeld = false;
+            s.triggerLastFireTime = now;
+        }
+        return;
+    }
+
+    if (!wantFire) return;
+
+    auto sinceLastFireMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - s.triggerLastFireTime).count();
+    if (sinceLastFireMs < g_config.triggerBotCooldownMs) return;
+
+    SetMouseButton(true);
+    s.triggerHeld = true;
+    s.triggerPressTime = now;
+}
+
 // Applies assistive aiming toward the detection nearest the crosshair within the FOV.
 // `detections` should be sorted by proximity to (centerX, centerY). Returns true while
 // the hotkey is held and aiming is active.
@@ -217,6 +266,7 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
     if (!g_config.autoAim || detections.empty() || !(GetAsyncKeyState(g_config.hotkeyKey) & 0x8000)) {
         s.wasAiming = false;
         s.lockedTrackId = -1; // Releasing the hotkey releases the target lock
+        if (g_config.triggerBotEnabled) UpdateTriggerBot(s, false);
         return false;
     }
 
@@ -262,6 +312,7 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
 
     if (!foundTarget) {
         s.lockedTrackId = -1; // Locked track left the FOV or died
+        if (g_config.triggerBotEnabled) UpdateTriggerBot(s, false);
         return true;          // Hotkey held but no in-FOV target
     }
 
@@ -279,6 +330,10 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
     float deltaX = targetCenterX - centerX;
     float deltaY = targetCenterY - centerY;
     float dist = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    if (g_config.triggerBotEnabled) {
+        UpdateTriggerBot(s, dist <= g_config.triggerBotRadius);
+    }
 
     g_config.aimDebugTargetActive = true;
     g_config.aimDebugTargetX = targetCenterX;

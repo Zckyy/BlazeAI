@@ -34,6 +34,15 @@ public:
         m_inject_mouse(&info, 1);
     }
 
+    // Left mouse button press/release via the same injection path.
+    void Click(bool down) const {
+        if (!m_inject_mouse) return;
+
+        mouse_info_t info{};
+        info.flags = down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
+        m_inject_mouse(&info, 1);
+    }
+
 private:
     struct mouse_info_t {
         POINT pt;

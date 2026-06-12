@@ -531,6 +531,20 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         }
         ImGui::Unindent();
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+        ImGui::Separator();
+        ImGui::Checkbox("Enable Trigger Bot", &config.triggerBotEnabled);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("While the aim hotkey is held and the locked target's aim point is\nwithin the radius below, automatically fires a left click.\nUses the same mouse injection method selected under Mouse & Smoothing Tuning.");
+        }
+        if (config.triggerBotEnabled) {
+            ImGui::Indent();
+            ImGui::SliderFloat("Trigger Radius (px)", &config.triggerBotRadius, 1.0f, 50.0f, "%.1f");
+            ImGui::SliderInt("Click Hold (ms)", &config.triggerBotHoldMs, 10, 200);
+            ImGui::SliderInt("Click Cooldown (ms)", &config.triggerBotCooldownMs, 0, 1000);
+            ImGui::Unindent();
+        }
+        ImGui::Dummy(ImVec2(0.0f, 5.0f));
     }
 
     if (ImGui::CollapsingHeader("Target Tracking", ImGuiTreeNodeFlags_DefaultOpen)) {
