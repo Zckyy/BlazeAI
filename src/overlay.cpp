@@ -471,6 +471,27 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         ImGui::Checkbox("Show Bounding Boxes", &config.showBoundingBoxes);
         ImGui::SliderFloat("Confidence Threshold", &config.confThreshold, 0.1f, 1.0f, "%.2f");
         ImGui::SliderInt("Max Detections", &config.maxDetections, 1, 20);
+        ImGui::SliderFloat("Aim Height", &config.aimHeightRatio, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Where on the target box to aim vertically.\n0.50 = center mass, ~0.15 = head (full-body boxes), 0.30 = upper chest.\nNormalized to box height, so it works at any target distance.\nCtrl+Click the slider to type an exact value.");
+        }
+
+        // Aim height presets. The active one (within slider display precision) is highlighted.
+        static const struct { const char* name; float value; } aimPresets[] = {
+            { "Head", 0.12f }, { "Neck", 0.20f }, { "Chest", 0.30f }, { "Center", 0.50f },
+        };
+        for (int i = 0; i < IM_ARRAYSIZE(aimPresets); ++i) {
+            if (i > 0) ImGui::SameLine();
+            bool active = std::fabs(config.aimHeightRatio - aimPresets[i].value) < 0.005f;
+            if (active) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.38f, 0.45f, 1.00f, 0.85f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f, 0.52f, 1.00f, 0.95f));
+            }
+            if (ImGui::SmallButton(aimPresets[i].name)) {
+                config.aimHeightRatio = aimPresets[i].value;
+            }
+            if (active) ImGui::PopStyleColor(2);
+        }
 
         // Dynamic Hotkey Selection
         struct KeyBinding {
@@ -809,8 +830,8 @@ void Overlay::DrawDetections(const std::vector<Detection>& detections, const App
         // Draw Text inside label box
         drawList->AddText(ImVec2(pMin.x + 4.0f, pMin.y - textSize.y - 2.0f), IM_COL32(255, 255, 255, 255), labelText);
 
-        // Highlight center point
-        ImVec2 center(pMin.x + det.box.width / 2.0f, pMin.y + det.box.height / 2.0f);
+        // Highlight the aim point (horizontal center, vertical at the configured ratio)
+        ImVec2 center(pMin.x + det.box.width / 2.0f, pMin.y + det.box.height * config.aimHeightRatio);
         drawList->AddCircleFilled(center, 3.0f, IM_COL32(255, 60, 60, 255));
 
         count++;

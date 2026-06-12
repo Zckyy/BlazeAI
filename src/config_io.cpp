@@ -58,6 +58,7 @@ void SaveConfig(const AppConfig& config) {
     f << "confThreshold=" << config.confThreshold << "\n";
 
     f << "autoAim=" << (config.autoAim ? 1 : 0) << "\n";
+    f << "aimHeightRatio=" << config.aimHeightRatio << "\n";
     f << "showBoundingBoxes=" << (config.showBoundingBoxes ? 1 : 0) << "\n";
     f << "showFov=" << (config.showFov ? 1 : 0) << "\n";
     f << "fovShape=" << config.fovShape << "\n";
@@ -140,6 +141,7 @@ void LoadConfig(AppConfig& config) {
     getFloat("confThreshold", config.confThreshold);
 
     getBool("autoAim", config.autoAim);
+    getFloat("aimHeightRatio", config.aimHeightRatio);
     getBool("showBoundingBoxes", config.showBoundingBoxes);
     getBool("showFov", config.showFov);
     getInt("fovShape", config.fovShape);
@@ -186,6 +188,7 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.maxDetections == b.maxDetections
         && a.confThreshold == b.confThreshold
         && a.autoAim == b.autoAim
+        && a.aimHeightRatio == b.aimHeightRatio
         && a.showBoundingBoxes == b.showBoundingBoxes
         && a.showFov == b.showFov
         && a.fovShape == b.fovShape

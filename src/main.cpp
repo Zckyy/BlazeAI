@@ -237,8 +237,11 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
         if (count >= g_config.maxDetections) break;
         ++count;
 
+        // Aim point: horizontal center, vertical at the configurable height ratio
+        // (0.5 = center mass, lower = higher on the target). Selection must use the
+        // same point as steering so an out-of-FOV aim point never gets selected.
         float targetX = det.box.x + det.box.width / 2.0f;
-        float targetY = det.box.y + det.box.height / 2.0f;
+        float targetY = det.box.y + det.box.height * g_config.aimHeightRatio;
 
         if (targetX >= (centerX - halfFov) && targetX <= (centerX + halfFov) &&
             targetY >= (centerY - halfFov) && targetY <= (centerY + halfFov)) {
@@ -271,7 +274,7 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
     s.lockedTrackId = bestTarget.trackId; // -1 when the tracker is disabled (no lock)
 
     float targetCenterX = bestTarget.box.x + bestTarget.box.width / 2.0f;
-    float targetCenterY = bestTarget.box.y + bestTarget.box.height / 2.0f;
+    float targetCenterY = bestTarget.box.y + bestTarget.box.height * g_config.aimHeightRatio;
 
     float deltaX = targetCenterX - centerX;
     float deltaY = targetCenterY - centerY;

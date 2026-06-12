@@ -41,6 +41,8 @@ struct AppConfig {
     int maxDetections = 5;
     float confThreshold = 0.5f;
     bool autoAim = true;
+    float aimHeightRatio = 0.5f;    // Vertical aim point within the box: 0 = top edge,
+                                    // 0.5 = center mass, ~0.15 = head on full-body boxes
     bool showBoundingBoxes = true;
     bool showFov = true;
     int fovShape = 0;               // 0 = square, 1 = circle (visual indicator only)
