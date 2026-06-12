@@ -44,6 +44,11 @@ struct AppConfig {
     bool showBoundingBoxes = true;
     bool showVisuals = true;
     bool showMenu = true;           // ImGui config panel visibility (Insert toggles)
+    bool showAimVisualizer = false;
+    bool showSmoothingTrail = true;
+    bool showTargetVector = true;
+    bool showRawAimPoint = true;
+    bool showSmoothedAimPoint = true;
     int hotkeyKey = VK_XBUTTON1;    // Mouse 4 by default
     bool isAimingActive = false;
 
@@ -66,6 +71,17 @@ struct AppConfig {
     float preprocessTimeMs = 0.0f;
     float inferenceTimeMs = 0.0f;
     float actualFps = 0.0f;
+
+    // Scalar-only processing-thread telemetry consumed by the Aim Debug Visualizer.
+    bool aimDebugTargetActive = false;
+    float aimDebugTargetX = 0.0f;
+    float aimDebugTargetY = 0.0f;
+    float aimDebugDeltaX = 0.0f;
+    float aimDebugDeltaY = 0.0f;
+    float aimDebugDistance = 0.0f;
+    float aimDebugSmooth = 1.0f;
+    float aimDebugMoveX = 0.0f;
+    float aimDebugMoveY = 0.0f;
 
     // Set by the processing thread while a model is loading (blocks for minutes when the
     // TensorRT engine is being built); the UI shows an indeterminate progress bar meanwhile.

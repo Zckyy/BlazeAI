@@ -61,6 +61,11 @@ void SaveConfig(const AppConfig& config) {
     f << "showBoundingBoxes=" << (config.showBoundingBoxes ? 1 : 0) << "\n";
     f << "showVisuals=" << (config.showVisuals ? 1 : 0) << "\n";
     f << "showMenu=" << (config.showMenu ? 1 : 0) << "\n";
+    f << "showAimVisualizer=" << (config.showAimVisualizer ? 1 : 0) << "\n";
+    f << "showSmoothingTrail=" << (config.showSmoothingTrail ? 1 : 0) << "\n";
+    f << "showTargetVector=" << (config.showTargetVector ? 1 : 0) << "\n";
+    f << "showRawAimPoint=" << (config.showRawAimPoint ? 1 : 0) << "\n";
+    f << "showSmoothedAimPoint=" << (config.showSmoothedAimPoint ? 1 : 0) << "\n";
     f << "hotkeyKey=" << config.hotkeyKey << "\n";
 
     f << "aimbot_humanized=" << (config.aimbot_humanized ? 1 : 0) << "\n";
@@ -130,6 +135,11 @@ void LoadConfig(AppConfig& config) {
     getBool("showBoundingBoxes", config.showBoundingBoxes);
     getBool("showVisuals", config.showVisuals);
     getBool("showMenu", config.showMenu);
+    getBool("showAimVisualizer", config.showAimVisualizer);
+    getBool("showSmoothingTrail", config.showSmoothingTrail);
+    getBool("showTargetVector", config.showTargetVector);
+    getBool("showRawAimPoint", config.showRawAimPoint);
+    getBool("showSmoothedAimPoint", config.showSmoothedAimPoint);
     getInt("hotkeyKey", config.hotkeyKey);
 
     getBool("aimbot_humanized", config.aimbot_humanized);
@@ -163,6 +173,11 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.showBoundingBoxes == b.showBoundingBoxes
         && a.showVisuals == b.showVisuals
         && a.showMenu == b.showMenu
+        && a.showAimVisualizer == b.showAimVisualizer
+        && a.showSmoothingTrail == b.showSmoothingTrail
+        && a.showTargetVector == b.showTargetVector
+        && a.showRawAimPoint == b.showRawAimPoint
+        && a.showSmoothedAimPoint == b.showSmoothedAimPoint
         && a.hotkeyKey == b.hotkeyKey
         && a.aimbot_humanized == b.aimbot_humanized
         && a.aimbot_relative == b.aimbot_relative

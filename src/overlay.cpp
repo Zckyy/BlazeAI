@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cfloat>
+#include <cmath>
 
 #pragma comment(lib, "dcomp.lib")
 
@@ -416,6 +417,22 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
     }
 
+    if (ImGui::CollapsingHeader("Aim Debug Visualizer")) {
+        ImGui::Indent();
+        ImGui::Checkbox("Show Aim Visualizer", &config.showAimVisualizer);
+        if (config.showAimVisualizer) {
+            ImGui::Indent();
+            ImGui::Checkbox("Show Smoothing Trail", &config.showSmoothingTrail);
+            ImGui::Checkbox("Show Target Vector", &config.showTargetVector);
+            ImGui::Checkbox("Show Raw Aim Point", &config.showRawAimPoint);
+            ImGui::Checkbox("Show Smoothed Aim Point", &config.showSmoothedAimPoint);
+            ImGui::TextDisabled("Hold the aim hotkey to display live telemetry.");
+            ImGui::Unindent();
+        }
+        ImGui::Unindent();
+        ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    }
+
     // 3. Targeting Options
     if (ImGui::CollapsingHeader("Targeting & Filters", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
@@ -613,6 +630,89 @@ void Overlay::DrawDetections(const std::vector<Detection>& detections, const App
         0,
         1.5f
     );
+
+    // Aim Debug Visualizer. History is display-only state kept on the UI thread.
+    static std::vector<ImVec2> smoothingTrail;
+    if (!config.showAimVisualizer || !config.aimDebugTargetActive) {
+        smoothingTrail.clear();
+    } else {
+        const ImVec2 crosshair(centerX, centerY);
+        const ImVec2 rawPoint(config.aimDebugTargetX, config.aimDebugTargetY);
+        const ImVec2 smoothedPoint(centerX + config.aimDebugMoveX, centerY + config.aimDebugMoveY);
+
+        float severity = (config.aimDebugSmooth - 1.0f) / 14.0f;
+        severity = std::max(0.0f, std::min(1.0f, severity));
+        ImVec4 smoothColor = severity < 0.5f
+            ? ImVec4(0.25f + severity * 1.5f, 0.95f, 0.25f, 1.0f)
+            : ImVec4(1.0f, 0.95f - (severity - 0.5f) * 1.5f, 0.20f, 1.0f);
+        ImU32 smoothU32 = ImGui::ColorConvertFloat4ToU32(smoothColor);
+
+        if (config.showTargetVector) {
+            drawList->AddLine(crosshair, rawPoint, IM_COL32(100, 190, 255, 190), 1.5f);
+            float length = std::max(0.001f, config.aimDebugDistance);
+            ImVec2 direction((rawPoint.x - crosshair.x) / length, (rawPoint.y - crosshair.y) / length);
+            ImVec2 perpendicular(-direction.y, direction.x);
+            ImVec2 arrowBase(rawPoint.x - direction.x * 11.0f, rawPoint.y - direction.y * 11.0f);
+            drawList->AddTriangleFilled(
+                rawPoint,
+                ImVec2(arrowBase.x + perpendicular.x * 5.0f, arrowBase.y + perpendicular.y * 5.0f),
+                ImVec2(arrowBase.x - perpendicular.x * 5.0f, arrowBase.y - perpendicular.y * 5.0f),
+                IM_COL32(100, 190, 255, 220));
+
+            char distanceText[48];
+            snprintf(distanceText, sizeof(distanceText), "%.1f px", config.aimDebugDistance);
+            ImVec2 midpoint((crosshair.x + rawPoint.x) * 0.5f + 6.0f,
+                            (crosshair.y + rawPoint.y) * 0.5f + 6.0f);
+            drawList->AddText(midpoint, IM_COL32(180, 220, 255, 230), distanceText);
+        }
+
+        if (config.showSmoothingTrail) {
+            if (smoothingTrail.empty()) smoothingTrail.push_back(crosshair);
+            ImVec2 last = smoothingTrail.back();
+            float change = std::sqrt((last.x - smoothedPoint.x) * (last.x - smoothedPoint.x) +
+                                     (last.y - smoothedPoint.y) * (last.y - smoothedPoint.y));
+            if (change >= 0.5f) smoothingTrail.push_back(smoothedPoint);
+            constexpr size_t kMaxTrailPoints = 30;
+            if (smoothingTrail.size() > kMaxTrailPoints) smoothingTrail.erase(smoothingTrail.begin());
+
+            for (size_t i = 1; i < smoothingTrail.size(); ++i) {
+                float alpha = static_cast<float>(i) / static_cast<float>(smoothingTrail.size());
+                ImVec4 faded = smoothColor;
+                faded.w = alpha * 0.75f;
+                drawList->AddLine(smoothingTrail[i - 1], smoothingTrail[i],
+                                  ImGui::ColorConvertFloat4ToU32(faded), 2.0f);
+            }
+            drawList->AddLine(crosshair, smoothedPoint,
+                              ImGui::ColorConvertFloat4ToU32({smoothColor.x, smoothColor.y, smoothColor.z, 0.35f}),
+                              1.0f);
+        } else {
+            smoothingTrail.clear();
+        }
+
+        if (config.showRawAimPoint) {
+            drawList->AddCircle(rawPoint, 6.0f, IM_COL32(90, 190, 255, 255), 16, 2.0f);
+            drawList->AddCircleFilled(rawPoint, 2.0f, IM_COL32(220, 245, 255, 255), 12);
+        }
+        if (config.showSmoothedAimPoint) {
+            DrawGlowCircle(drawList, smoothedPoint, 5.0f, smoothColor, 0.55f, 4);
+            drawList->AddCircleFilled(smoothedPoint, 4.0f, smoothU32, 16);
+        }
+
+        char stats[256];
+        snprintf(stats, sizeof(stats),
+                 "AIM DEBUG\nSmooth: %.2f\nDelta: %.1f, %.1f\nDistance: %.1f px\nMove: %.1f, %.1f",
+                 config.aimDebugSmooth, config.aimDebugDeltaX, config.aimDebugDeltaY,
+                 config.aimDebugDistance, config.aimDebugMoveX, config.aimDebugMoveY);
+        ImVec2 statsPos(centerX + halfFov + 16.0f, centerY - halfFov);
+        ImVec2 statsSize = ImGui::CalcTextSize(stats);
+        drawList->AddRectFilled(ImVec2(statsPos.x - 8.0f, statsPos.y - 7.0f),
+                                ImVec2(statsPos.x + statsSize.x + 8.0f, statsPos.y + statsSize.y + 7.0f),
+                                IM_COL32(15, 16, 22, 205), 5.0f);
+        drawList->AddRect(ImVec2(statsPos.x - 8.0f, statsPos.y - 7.0f),
+                          ImVec2(statsPos.x + statsSize.x + 8.0f, statsPos.y + statsSize.y + 7.0f),
+                          smoothU32, 5.0f, 0, 1.0f);
+        drawList->AddText(statsPos, IM_COL32(235, 238, 245, 255), stats);
+    }
 
     // 2. Draw detections bounding boxes and labels if enabled
     if (!config.showBoundingBoxes) return;

@@ -210,6 +210,8 @@ static bool RunAiVision(DXGICapture& capture, CUDAProcessor& cudaProc, Detector&
 // the hotkey is held and aiming is active.
 static bool ApplyAimAssist(const std::vector<Detection>& detections,
                            float centerX, float centerY, AimState& s) {
+    g_config.aimDebugTargetActive = false;
+
     if (!g_config.autoAim || detections.empty() || !(GetAsyncKeyState(g_config.hotkeyKey) & 0x8000)) {
         s.wasAiming = false;
         return false;
@@ -249,6 +251,16 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
     float deltaX = targetCenterX - centerX;
     float deltaY = targetCenterY - centerY;
     float dist = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    g_config.aimDebugTargetActive = true;
+    g_config.aimDebugTargetX = targetCenterX;
+    g_config.aimDebugTargetY = targetCenterY;
+    g_config.aimDebugDeltaX = deltaX;
+    g_config.aimDebugDeltaY = deltaY;
+    g_config.aimDebugDistance = dist;
+    g_config.aimDebugSmooth = std::max(1.0f, g_config.aimbot_smooth);
+    g_config.aimDebugMoveX = 0.0f;
+    g_config.aimDebugMoveY = 0.0f;
 
     // Detect target switch or new aim sequence
     if (std::abs(targetCenterX - s.lastTargetX) > 10 || std::abs(targetCenterY - s.lastTargetY) > 10 || !s.wasAiming) {
@@ -298,6 +310,7 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
 
         float currentSmooth = g_config.aimbot_smooth * (1.0f + easeOutTerm + easeInTerm);
         if (currentSmooth < 1.0f) currentSmooth = 1.0f;
+        g_config.aimDebugSmooth = currentSmooth;
 
         s.errorX += deltaX / currentSmooth;
         s.errorY += deltaY / currentSmooth;
@@ -324,8 +337,12 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
                 int rel_dy = static_cast<int>(dy * g_config.aimbot_sensitivity);
                 if (rel_dx == 0 && dx != 0) rel_dx = (dx > 0) ? 1 : -1;
                 if (rel_dy == 0 && dy != 0) rel_dy = (dy > 0) ? 1 : -1;
+                g_config.aimDebugMoveX = static_cast<float>(rel_dx);
+                g_config.aimDebugMoveY = static_cast<float>(rel_dy);
                 MoveMouseRelative(rel_dx, rel_dy);
             } else {
+                g_config.aimDebugMoveX = static_cast<float>(dx);
+                g_config.aimDebugMoveY = static_cast<float>(dy);
                 MoveMouseTo(static_cast<int>(centerX + dx), static_cast<int>(centerY + dy));
             }
         }
@@ -343,10 +360,14 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
             int rel_dy = static_cast<int>(move_y * g_config.aimbot_sensitivity);
             if (rel_dx == 0 && move_x != 0.0f) rel_dx = (move_x > 0.0f) ? 1 : -1;
             if (rel_dy == 0 && move_y != 0.0f) rel_dy = (move_y > 0.0f) ? 1 : -1;
+            g_config.aimDebugMoveX = static_cast<float>(rel_dx);
+            g_config.aimDebugMoveY = static_cast<float>(rel_dy);
             if (rel_dx != 0 || rel_dy != 0) {
                 MoveMouseRelative(rel_dx, rel_dy);
             }
         } else {
+            g_config.aimDebugMoveX = move_x;
+            g_config.aimDebugMoveY = move_y;
             MoveMouseTo(static_cast<int>(centerX + move_x), static_cast<int>(centerY + move_y));
         }
     }
