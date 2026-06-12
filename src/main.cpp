@@ -598,6 +598,10 @@ int main() {
         }
         insertPressedLast = insertPressed;
 
+        // While the menu is visible the overlay steals focus/cursor from the game so it
+        // can actually be clicked (see Overlay::UpdateClickThroughState).
+        overlay.SetMenuOpen(g_config.showMenu && g_config.showVisuals);
+
         {
             std::lock_guard<std::mutex> lock(overlay.GetD3DMutex());
             overlay.BeginFrame();

@@ -125,6 +125,11 @@ public:
     // and this app's own desktop duplication). Requires Win10 2004+; no-op below.
     void ApplyStreamProof(bool enabled);
 
+    // Tell the overlay whether the config menu is open. While open, the overlay takes
+    // keyboard focus and mouse input away from the game so the cursor appears and the
+    // menu is usable; on close, focus is handed back to the previous window.
+    void SetMenuOpen(bool open) { m_menuOpen = open; }
+
     ID3D11Device* GetDevice() { return m_pd3dDevice.Get(); }
     ID3D11DeviceContext* GetDeviceContext() { return m_pd3dDeviceContext.Get(); }
     HWND GetHwnd() const { return m_hwnd; }
@@ -141,6 +146,8 @@ public:
 private:
     std::mutex m_d3dMutex;
     HWND m_hwnd = nullptr;
+    bool m_menuOpen = false;
+    HWND m_prevForeground = nullptr; // Window to restore focus to when the menu closes
     int m_screenWidth = 0;
     int m_screenHeight = 0;
 

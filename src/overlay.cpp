@@ -155,9 +155,12 @@ void Overlay::UpdateClickThroughState() {
     LONG_PTR exStyle = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
     
     // Dynamic click-through:
-    // If ImGui wants the mouse (e.g. user is dragging/clicking a panel) or the color picker is active,
-    // we remove WS_EX_TRANSPARENT. Otherwise, we add it back so clicks fall through to the background.
-    if (io.WantCaptureMouse || m_stillFrameCaptured) {
+    // If the config menu is open, ImGui wants the mouse (e.g. user is dragging/clicking a
+    // panel), or the color picker is active, we remove WS_EX_TRANSPARENT. Otherwise, we add
+    // it back so clicks fall through to the background. The menu must force this (not just
+    // WantCaptureMouse): in a game the cursor is pinned to screen center, never hovers a
+    // panel, so WantCaptureMouse alone would never flip and the menu would be unclickable.
+    if (m_menuOpen || io.WantCaptureMouse || m_stillFrameCaptured) {
         if (exStyle & WS_EX_TRANSPARENT) {
             SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_TRANSPARENT);
         }
@@ -167,24 +170,33 @@ void Overlay::UpdateClickThroughState() {
         }
     }
 
-    // Keyboard focus: WM_CHAR/WM_KEYDOWN only reach the *focused* window, but the overlay
-    // is WS_EX_NOACTIVATE so it normally never gets focus — that's why typing into ImGui
-    // text fields (e.g. the color RGB inputs) did nothing. While ImGui wants text input we
-    // strip NOACTIVATE and pull the overlay to the foreground so keystrokes route to it;
-    // once editing ends we restore NOACTIVATE so the game keeps focus and hotkeys work.
-    static bool s_hadTextFocus = false;
-    if (io.WantTextInput) {
-        if (!s_hadTextFocus) {
+    // Focus stealing: WM_CHAR/WM_KEYDOWN (and a visible cursor in fullscreen games) only
+    // come with being the *foreground* window, but the overlay is WS_EX_NOACTIVATE so it
+    // normally never gets focus. We take focus in two cases:
+    //  - ImGui wants text input (typing into a field must reach us), and
+    //  - the config menu is open: a game in the foreground keeps the cursor captured,
+    //    clipped and hidden, so the menu can't be used until we become foreground and
+    //    release the clip. Closing the menu hands focus straight back to the game.
+    bool wantFocus = io.WantTextInput || m_menuOpen;
+    static bool s_hadFocus = false;
+    if (wantFocus) {
+        if (!s_hadFocus) {
+            m_prevForeground = GetForegroundWindow();
             exStyle = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
             SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
             SetForegroundWindow(m_hwnd);
             SetFocus(m_hwnd);
-            s_hadTextFocus = true;
+            ClipCursor(nullptr); // Undo any cursor confinement the game had active
+            s_hadFocus = true;
         }
-    } else if (s_hadTextFocus) {
+    } else if (s_hadFocus) {
         exStyle = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
         SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
-        s_hadTextFocus = false;
+        if (m_prevForeground && IsWindow(m_prevForeground) && m_prevForeground != m_hwnd) {
+            SetForegroundWindow(m_prevForeground); // Give the game its focus back
+        }
+        m_prevForeground = nullptr;
+        s_hadFocus = false;
     }
 }
 
