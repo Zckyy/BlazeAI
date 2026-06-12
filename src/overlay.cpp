@@ -4,12 +4,11 @@
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
 #include <backends/imgui_impl_dx11.h>
-#include <dwmapi.h>
 #include <iostream>
 #include <cstdio>
 #include <cfloat>
 
-#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "dcomp.lib")
 
 // Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -45,9 +44,13 @@ bool Overlay::Init(HINSTANCE hInstance) {
     WNDCLASSEXW wc = { sizeof(WNDCLASSEXW), CS_CLASSDC, WindowProc, 0L, 0L, hInstance, NULL, NULL, NULL, NULL, L"OverlayWindowClass", NULL };
     RegisterClassExW(&wc);
 
-    // 3. Create Window with transparent click-through styles
+    // 3. Create Window with transparent click-through styles.
+    // WS_EX_NOREDIRECTIONBITMAP: no GDI redirection surface is allocated — all visuals come
+    // from the DirectComposition swap chain, so DWM skips the legacy layered-window copy.
+    // WS_EX_LAYERED stays only because WS_EX_TRANSPARENT (mouse click-through) requires it;
+    // with NOREDIRECTIONBITMAP it costs nothing (no SetLayeredWindowAttributes needed).
     m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE,
+        WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP,
         L"OverlayWindowClass",
         L"Overlay Assist",
         WS_POPUP,
@@ -59,13 +62,6 @@ bool Overlay::Init(HINSTANCE hInstance) {
         std::cerr << "Failed to create overlay window\n";
         return false;
     }
-
-    // Set transparency color key and alpha (using full opacity since we use DWM composition)
-    SetLayeredWindowAttributes(m_hwnd, RGB(0, 0, 0), 255, LWA_ALPHA);
-
-    // Set DWM window composition attributes to enable transparent client area
-    MARGINS margins = { -1, -1, -1, -1 };
-    DwmExtendFrameIntoClientArea(m_hwnd, &margins);
 
     // 4. Initialize D3D11 Device and SwapChain
     if (!CreateDeviceD3D()) {
@@ -653,48 +649,69 @@ void Overlay::DrawDetections(const std::vector<Detection>& detections, const App
     }
 }
 
-// Direct3D11 helper functions
+// Direct3D11 helper functions.
+// Flip-model swap chain hosted on a DirectComposition visual: DWM composites the buffer
+// directly with premultiplied alpha (often on a hardware overlay plane) instead of the
+// legacy blt-model copy through a layered-window redirection surface. ImGui renders onto a
+// (0,0,0,0)-cleared target with standard SrcAlpha blending, which yields premultiplied
+// values for the compositor.
 bool Overlay::CreateDeviceD3D() {
-    // Setup swap chain
-    DXGI_SWAP_CHAIN_DESC sd;
-    ZeroMemory(&sd, sizeof(sd));
-    sd.BufferCount = 2;
-    sd.BufferDesc.Width = m_screenWidth;
-    sd.BufferDesc.Height = m_screenHeight;
-    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferDesc.RefreshRate.Numerator = 0;
-    sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = m_hwnd;
-    sd.SampleDesc.Count = 1;
-    sd.SampleDesc.Quality = 0;
-    sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-
-    UINT createDeviceFlags = 0;
+    UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT; // required for DComp interop
     // createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG; // Uncomment for active debugging
 
     D3D_FEATURE_LEVEL featureLevel;
     const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0 };
-    
-    HRESULT hr = D3D11CreateDeviceAndSwapChain(
-        NULL, 
-        D3D_DRIVER_TYPE_HARDWARE, 
-        NULL, 
-        createDeviceFlags, 
-        featureLevelArray, 
+
+    HRESULT hr = D3D11CreateDevice(
+        NULL,
+        D3D_DRIVER_TYPE_HARDWARE,
+        NULL,
+        createDeviceFlags,
+        featureLevelArray,
         2,
-        D3D11_SDK_VERSION, 
-        &sd, 
-        &m_pSwapChain, 
-        &m_pd3dDevice, 
-        &featureLevel, 
+        D3D11_SDK_VERSION,
+        &m_pd3dDevice,
+        &featureLevel,
         &m_pd3dDeviceContext
     );
 
     if (FAILED(hr)) {
-        std::cerr << "D3D11CreateDeviceAndSwapChain failed. HR = " << std::hex << hr << "\n";
+        std::cerr << "D3D11CreateDevice failed. HR = " << std::hex << hr << "\n";
+        return false;
+    }
+
+    // Composition swap chains have no OutputWindow and must use a flip swap effect.
+    DXGI_SWAP_CHAIN_DESC1 sd = {};
+    sd.Width = m_screenWidth;
+    sd.Height = m_screenHeight;
+    sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.SampleDesc.Count = 1;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.BufferCount = 2;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    sd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
+
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter;
+    Microsoft::WRL::ComPtr<IDXGIFactory2> dxgiFactory;
+    hr = m_pd3dDevice.As(&dxgiDevice);
+    if (SUCCEEDED(hr)) hr = dxgiDevice->GetAdapter(&dxgiAdapter);
+    if (SUCCEEDED(hr)) hr = dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
+    if (SUCCEEDED(hr)) hr = dxgiFactory->CreateSwapChainForComposition(m_pd3dDevice.Get(), &sd, NULL, &m_pSwapChain);
+    if (FAILED(hr)) {
+        std::cerr << "CreateSwapChainForComposition failed. HR = " << std::hex << hr << "\n";
+        return false;
+    }
+
+    // Wire the swap chain to the window: device -> target(hwnd) -> visual(swap chain).
+    hr = DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&m_dcompDevice));
+    if (SUCCEEDED(hr)) hr = m_dcompDevice->CreateTargetForHwnd(m_hwnd, TRUE, &m_dcompTarget);
+    if (SUCCEEDED(hr)) hr = m_dcompDevice->CreateVisual(&m_dcompVisual);
+    if (SUCCEEDED(hr)) hr = m_dcompVisual->SetContent(m_pSwapChain.Get());
+    if (SUCCEEDED(hr)) hr = m_dcompTarget->SetRoot(m_dcompVisual.Get());
+    if (SUCCEEDED(hr)) hr = m_dcompDevice->Commit();
+    if (FAILED(hr)) {
+        std::cerr << "DirectComposition setup failed. HR = " << std::hex << hr << "\n";
         return false;
     }
 
@@ -704,6 +721,10 @@ bool Overlay::CreateDeviceD3D() {
 
 void Overlay::CleanupDeviceD3D() {
     CleanupRenderTarget();
+    // Release the composition chain before the swap chain it references.
+    m_dcompVisual.Reset();
+    m_dcompTarget.Reset();
+    m_dcompDevice.Reset();
     m_pSwapChain.Reset();
     m_pd3dDeviceContext.Reset();
     m_pd3dDevice.Reset();

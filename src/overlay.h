@@ -2,6 +2,8 @@
 
 #include <windows.h>
 #include <d3d11.h>
+#include <dxgi1_2.h>
+#include <dcomp.h>
 #include <wrl/client.h>
 #include <string>
 #include <vector>
@@ -111,8 +113,15 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D11Device> m_pd3dDevice;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_pd3dDeviceContext;
-    Microsoft::WRL::ComPtr<IDXGISwapChain> m_pSwapChain;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> m_pSwapChain;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_mainRenderTargetView;
+
+    // DirectComposition chain that hosts the flip-model swap chain. DWM composites the
+    // swap chain buffer directly (premultiplied alpha), skipping the legacy layered-window
+    // redirection-surface copy, so the overlay no longer degrades the game's frame pacing.
+    Microsoft::WRL::ComPtr<IDCompositionDevice> m_dcompDevice;
+    Microsoft::WRL::ComPtr<IDCompositionTarget> m_dcompTarget;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> m_dcompVisual;
 
     bool CreateDeviceD3D();
     void CleanupDeviceD3D();
