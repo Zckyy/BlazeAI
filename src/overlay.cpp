@@ -129,6 +129,14 @@ void Overlay::Shutdown() {
     UnregisterClassW(L"OverlayWindowClass", GetModuleHandle(NULL));
 }
 
+void Overlay::ApplyStreamProof(bool enabled) {
+    if (!m_hwnd) return;
+    // WDA_EXCLUDEFROMCAPTURE removes the window from every capture path (OBS/Discord
+    // window+display capture, PrintScreen, and our own DXGI desktop duplication — so the
+    // HUD can never feed back into color/AI vision). Fails on pre-2004 Win10; ignore there.
+    SetWindowDisplayAffinity(m_hwnd, enabled ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE);
+}
+
 bool Overlay::ProcessMessages() {
     MSG msg;
     while (PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE)) {
@@ -418,6 +426,12 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
             ImGui::Combo("FOV Indicator Shape", &config.fovShape, fovShapes, IM_ARRAYSIZE(fovShapes));
         }
         ImGui::SliderInt("Capture FPS Limit", &config.targetFps, 1, 400);
+        if (ImGui::Checkbox("Stream-Proof Overlay", &config.streamProof)) {
+            ApplyStreamProof(config.streamProof);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Hides the overlay from recordings, screenshots and screen shares.\nRequires Windows 10 2004 or newer.");
+        }
         ImGui::Unindent();
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
     }

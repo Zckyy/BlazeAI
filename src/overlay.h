@@ -45,6 +45,10 @@ struct AppConfig {
     bool showFov = true;
     int fovShape = 0;               // 0 = square, 1 = circle (visual indicator only)
     bool showVisuals = true;
+    bool streamProof = true;        // Hide overlay from screen capture (WDA_EXCLUDEFROMCAPTURE).
+                                    // Default ON: also hides the HUD from our own desktop
+                                    // duplication, so overlay drawings can't feed back into
+                                    // color/AI vision as false targets.
     bool showMenu = true;           // ImGui config panel visibility (Insert toggles)
     bool showAimVisualizer = false;
     bool showSmoothingTrail = true;
@@ -109,6 +113,10 @@ public:
     void DrawConfigPanel(AppConfig& config);
     void DrawDetections(const std::vector<Detection>& detections, const AppConfig& config);
     void DrawColorPickerOverlay(AppConfig& config);
+
+    // Hide/show the overlay window in screen capture (recordings, screenshots,
+    // and this app's own desktop duplication). Requires Win10 2004+; no-op below.
+    void ApplyStreamProof(bool enabled);
 
     ID3D11Device* GetDevice() { return m_pd3dDevice.Get(); }
     ID3D11DeviceContext* GetDeviceContext() { return m_pd3dDeviceContext.Get(); }

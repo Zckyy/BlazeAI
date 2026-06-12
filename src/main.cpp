@@ -524,6 +524,7 @@ int main() {
 
     // 2. Load persisted settings from config.ini (next to the exe), then scan models.
     LoadConfig(g_config);
+    overlay.ApplyStreamProof(g_config.streamProof);
 
     g_config.availableModels = Detector::ScanModelsDir();
     if (!g_config.availableModels.empty()) {
