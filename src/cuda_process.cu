@@ -1,6 +1,7 @@
 #include "cuda_process.h"
 #include <device_launch_parameters.h>
 #include <iostream>
+#include <chrono>
 
 // CUDA kernel to crop, resize, convert BGRA to RGB planar, and normalize
 __global__ void PreprocessKernel(
@@ -39,6 +40,8 @@ CUDAProcessor::CUDAProcessor() {}
 
 CUDAProcessor::~CUDAProcessor() {
     UnregisterTexture();
+    if (m_evStart) cudaEventDestroy(m_evStart);
+    if (m_evStop) cudaEventDestroy(m_evStop);
 }
 
 bool CUDAProcessor::RegisterTexture(ID3D11Texture2D* texture) {
@@ -113,6 +116,8 @@ bool CUDAProcessor::ProcessFrame(
         return false;
     }
 
+    auto tMap0 = std::chrono::high_resolution_clock::now();
+
     // Map D3D11 resource to CUDA
     cudaError_t err = cudaGraphicsMapResources(1, &m_cudaResource, stream);
     if (err != cudaSuccess) {
@@ -136,6 +141,10 @@ bool CUDAProcessor::ProcessFrame(
         return false;
     }
 
+    // Map (incl. getting the mapped array) is done; record its cost.
+    auto tMap1 = std::chrono::high_resolution_clock::now();
+    m_lastMapMs = std::chrono::duration<float, std::milli>(tMap1 - tMap0).count();
+
     // Calculate crop boundaries centered on the screen
     int startX = (desktopWidth - fovSize) / 2;
     int startY = (desktopHeight - fovSize) / 2;
@@ -143,6 +152,14 @@ bool CUDAProcessor::ProcessFrame(
     // Run GPU preprocessing kernel
     dim3 block(16, 16);
     dim3 grid((outWidth + block.x - 1) / block.x, (outHeight + block.y - 1) / block.y);
+
+    // Bracket the kernel with CUDA events to measure its true on-GPU execution time,
+    // independent of how long the CPU blocks in the sync below (which includes queue wait).
+    if (!m_evStart) {
+        cudaEventCreate(&m_evStart);
+        cudaEventCreate(&m_evStop);
+    }
+    cudaEventRecord(m_evStart, stream);
 
     PreprocessKernel<<<grid, block, 0, stream>>>(
         texObj,
@@ -152,15 +169,26 @@ bool CUDAProcessor::ProcessFrame(
         d_outBuffer
     );
 
+    cudaEventRecord(m_evStop, stream);
+
     // Synchronize to check for kernel errors
     err = cudaStreamSynchronize(stream);
     if (err != cudaSuccess) {
         std::cerr << "Kernel launch failed: " << cudaGetErrorString(err) << "\n";
     }
 
+    cudaEventElapsedTime(&m_lastKernelGpuMs, m_evStart, m_evStop);
+
+    // Kernel launch + sync is done; record its cost (this is the GPU compute portion).
+    auto tKernel1 = std::chrono::high_resolution_clock::now();
+    m_lastKernelMs = std::chrono::duration<float, std::milli>(tKernel1 - tMap1).count();
+
     // Unmap the graphics resource. The texture object is cached and reused next frame
     // (it stays valid because the registered D3D texture is not recreated per frame).
     cudaGraphicsUnmapResources(1, &m_cudaResource, stream);
+
+    auto tUnmap1 = std::chrono::high_resolution_clock::now();
+    m_lastUnmapMs = std::chrono::duration<float, std::milli>(tUnmap1 - tKernel1).count();
 
     return (err == cudaSuccess);
 }

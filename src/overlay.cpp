@@ -228,7 +228,10 @@ void Overlay::EndFrame() {
 }
 
 void Overlay::Present() {
-    m_pSwapChain->Present(1, 0); // Synchronize with monitor refresh rate (VSync)
+    // Immediate present (no VSync). VSync here pushes a vblank-wait into the shared GPU
+    // command queue, which stalls the processing thread's CUDA sync behind it. The main
+    // loop caps the overlay frame rate instead (see ProcessingThread / GUI loop).
+    m_pSwapChain->Present(0, 0);
 }
 
 static void DrawGlowCircle(ImDrawList* dl, ImVec2 center, float radius, ImVec4 color, float intensity, int layers = 5) {
@@ -696,6 +699,13 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         ImGui::PlotLines("##inf", infHist.v, kHist, infHist.off, ovl, 0.0f, FLT_MAX, plotSize);
         snprintf(ovl, sizeof(ovl), "Preprocess (CUDA): %.2f ms", preAvg);
         ImGui::PlotLines("##pre", preHist.v, kHist, preHist.off, ovl, 0.0f, FLT_MAX, plotSize);
+        // Preprocess breakdown: shows whether the cost is driver map/unmap (sync stall) or kernel.
+        ImGui::Indent();
+        ImGui::TextDisabled("map %.2f  |  kernel(cpu) %.2f  |  unmap %.2f ms",
+                            config.preprocessMapMs, config.preprocessKernelMs, config.preprocessUnmapMs);
+        ImGui::TextDisabled("kernel(gpu) %.3f ms  <- true compute; cpu-gpu gap = queue/contention wait",
+                            config.preprocessKernelGpuMs);
+        ImGui::Unindent();
         snprintf(ovl, sizeof(ovl), "Capture: %.2f ms", capAvg);
         ImGui::PlotLines("##cap", capHist.v, kHist, capHist.off, ovl, 0.0f, FLT_MAX, plotSize);
         ImGui::Unindent();

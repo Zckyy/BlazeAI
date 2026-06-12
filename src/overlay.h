@@ -92,6 +92,11 @@ struct AppConfig {
     float captureTimeMs = 0.0f;
     float preprocessTimeMs = 0.0f;
     float inferenceTimeMs = 0.0f;
+    // Preprocess sub-stage breakdown (ms): driver map, kernel+sync, driver unmap.
+    float preprocessMapMs = 0.0f;
+    float preprocessKernelMs = 0.0f;     // CPU wall-time: launch + sync (includes GPU queue wait)
+    float preprocessUnmapMs = 0.0f;
+    float preprocessKernelGpuMs = 0.0f;  // True GPU execution time of the preprocess kernel
     float actualFps = 0.0f;
 
     // Scalar-only processing-thread telemetry consumed by the Aim Debug Visualizer.

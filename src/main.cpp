@@ -218,6 +218,10 @@ static bool RunAiVision(DXGICapture& capture, CUDAProcessor& cudaProc, Detector&
             g_config.fovSize, inputW, inputH, d_inputBuffer);
         auto t1 = std::chrono::high_resolution_clock::now();
         g_config.preprocessTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+        g_config.preprocessMapMs = cudaProc.m_lastMapMs;
+        g_config.preprocessKernelMs = cudaProc.m_lastKernelMs;
+        g_config.preprocessUnmapMs = cudaProc.m_lastUnmapMs;
+        g_config.preprocessKernelGpuMs = cudaProc.m_lastKernelGpuMs;
     }
 
     if (!preprocessed || !detector.IsLoaded()) return false;
@@ -642,6 +646,7 @@ int main() {
     static bool deletePressedLast = false;
     static bool insertPressedLast = false;
     while (overlay.ProcessMessages()) {
+        auto overlayLoopStart = std::chrono::high_resolution_clock::now();
         // Toggle visuals toggle hotkey (Delete Key)
         bool deletePressed = (GetAsyncKeyState(VK_DELETE) & 0x8000) != 0;
         if (deletePressed && !deletePressedLast) {
@@ -685,14 +690,23 @@ int main() {
             overlay.EndFrame();
         }
 
-        // Present outside the mutex lock to synchronize with the monitor's native refresh rate (VSync)
-        // without blocking the capture/processing thread.
+        // Present outside the mutex lock so it never blocks the capture/processing thread.
         overlay.Present();
 
         // Persist settings whenever the UI (or a toggle hotkey) changed them.
         if (!SettingsEqual(g_config, lastSavedConfig)) {
             SaveConfig(g_config);
             lastSavedConfig = g_config;
+        }
+
+        // Cap the overlay frame rate. The HUD has no need to run at the monitor's full
+        // refresh, and every overlay frame submits GPU work that contends with the
+        // processing thread's CUDA preprocess on the shared device.
+        const double overlayPeriodMs = 1000.0 / 60.0;
+        auto overlayElapsedMs = std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - overlayLoopStart).count();
+        if (overlayElapsedMs < overlayPeriodMs) {
+            PreciseSleep(overlayPeriodMs - overlayElapsedMs);
         }
     }
 

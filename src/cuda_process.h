@@ -20,6 +20,13 @@ public:
         cudaStream_t stream = nullptr
     );
 
+    // Sub-stage timings (ms) from the most recent ProcessFrame, for diagnosing where the
+    // per-frame preprocess cost actually lives (driver map/unmap vs. kernel+sync).
+    float m_lastMapMs = 0.0f;
+    float m_lastKernelMs = 0.0f;     // CPU wall-time of kernel launch + cudaStreamSynchronize
+    float m_lastUnmapMs = 0.0f;
+    float m_lastKernelGpuMs = 0.0f;  // True GPU execution time of the kernel (via CUDA events)
+
 private:
     // Returns a CUDA texture object for the given array, reusing the cached one when the
     // underlying array has not changed (avoids per-frame create/destroy overhead).
@@ -29,4 +36,8 @@ private:
     cudaGraphicsResource_t m_cudaResource = nullptr;
     cudaTextureObject_t m_texObj = 0;
     cudaArray_t m_cachedArray = nullptr;
+
+    // Lazily-created event pair used to measure true on-GPU kernel time.
+    cudaEvent_t m_evStart = nullptr;
+    cudaEvent_t m_evStop = nullptr;
 };
