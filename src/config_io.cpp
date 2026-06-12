@@ -59,6 +59,8 @@ void SaveConfig(const AppConfig& config) {
 
     f << "autoAim=" << (config.autoAim ? 1 : 0) << "\n";
     f << "showBoundingBoxes=" << (config.showBoundingBoxes ? 1 : 0) << "\n";
+    f << "showFov=" << (config.showFov ? 1 : 0) << "\n";
+    f << "fovShape=" << config.fovShape << "\n";
     f << "showVisuals=" << (config.showVisuals ? 1 : 0) << "\n";
     f << "showMenu=" << (config.showMenu ? 1 : 0) << "\n";
     f << "showAimVisualizer=" << (config.showAimVisualizer ? 1 : 0) << "\n";
@@ -133,6 +135,8 @@ void LoadConfig(AppConfig& config) {
 
     getBool("autoAim", config.autoAim);
     getBool("showBoundingBoxes", config.showBoundingBoxes);
+    getBool("showFov", config.showFov);
+    getInt("fovShape", config.fovShape);
     getBool("showVisuals", config.showVisuals);
     getBool("showMenu", config.showMenu);
     getBool("showAimVisualizer", config.showAimVisualizer);
@@ -171,6 +175,8 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.confThreshold == b.confThreshold
         && a.autoAim == b.autoAim
         && a.showBoundingBoxes == b.showBoundingBoxes
+        && a.showFov == b.showFov
+        && a.fovShape == b.fovShape
         && a.showVisuals == b.showVisuals
         && a.showMenu == b.showMenu
         && a.showAimVisualizer == b.showAimVisualizer

@@ -412,6 +412,11 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
     if (ImGui::CollapsingHeader("Capture & FOV Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
         ImGui::SliderInt("FOV Size (Pixels)", &config.fovSize, 100, 800);
+        ImGui::Checkbox("Show FOV Indicator", &config.showFov);
+        if (config.showFov) {
+            const char* fovShapes[] = { "Square", "Circle" };
+            ImGui::Combo("FOV Indicator Shape", &config.fovShape, fovShapes, IM_ARRAYSIZE(fovShapes));
+        }
         ImGui::SliderInt("Capture FPS Limit", &config.targetFps, 1, 400);
         ImGui::Unindent();
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -616,20 +621,27 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
 void Overlay::DrawDetections(const std::vector<Detection>& detections, const AppConfig& config) {
     ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 
-    // 1. Draw central FOV rectangle indicator
+    // 1. Draw central FOV indicator. Shape affects visualization only; capture remains square.
     float centerX = m_screenWidth / 2.0f;
     float centerY = m_screenHeight / 2.0f;
     float halfFov = config.fovSize / 2.0f;
 
     ImVec4 fovColor = config.isAimingActive ? ImVec4(0.9f, 0.2f, 0.2f, 0.6f) : ImVec4(0.5f, 0.5f, 0.5f, 0.4f);
-    drawList->AddRect(
-        ImVec2(centerX - halfFov, centerY - halfFov),
-        ImVec2(centerX + halfFov, centerY + halfFov),
-        ImGui::ColorConvertFloat4ToU32(fovColor),
-        3.0f,
-        0,
-        1.5f
-    );
+    if (config.showFov) {
+        ImU32 fovU32 = ImGui::ColorConvertFloat4ToU32(fovColor);
+        if (config.fovShape == 1) {
+            drawList->AddCircle(ImVec2(centerX, centerY), halfFov, fovU32, 64, 1.5f);
+        } else {
+            drawList->AddRect(
+                ImVec2(centerX - halfFov, centerY - halfFov),
+                ImVec2(centerX + halfFov, centerY + halfFov),
+                fovU32,
+                3.0f,
+                0,
+                1.5f
+            );
+        }
+    }
 
     // Aim Debug Visualizer. History is display-only state kept on the UI thread.
     static std::vector<ImVec2> smoothingTrail;

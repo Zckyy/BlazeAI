@@ -42,6 +42,8 @@ struct AppConfig {
     float confThreshold = 0.5f;
     bool autoAim = true;
     bool showBoundingBoxes = true;
+    bool showFov = true;
+    int fovShape = 0;               // 0 = square, 1 = circle (visual indicator only)
     bool showVisuals = true;
     bool showMenu = true;           // ImGui config panel visibility (Insert toggles)
     bool showAimVisualizer = false;
