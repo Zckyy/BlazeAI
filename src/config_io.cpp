@@ -71,6 +71,11 @@ void SaveConfig(const AppConfig& config) {
     f << "showSmoothedAimPoint=" << (config.showSmoothedAimPoint ? 1 : 0) << "\n";
     f << "hotkeyKey=" << config.hotkeyKey << "\n";
 
+    f << "trackerEnabled=" << (config.trackerEnabled ? 1 : 0) << "\n";
+    f << "trackerIou=" << config.trackerIou << "\n";
+    f << "trackerMaxMissed=" << config.trackerMaxMissed << "\n";
+    f << "trackerSwitchRatio=" << config.trackerSwitchRatio << "\n";
+
     f << "aimbot_humanized=" << (config.aimbot_humanized ? 1 : 0) << "\n";
     f << "aimbot_relative=" << (config.aimbot_relative ? 1 : 0) << "\n";
     f << "mouseInputMethod=" << config.mouseInputMethod << "\n";
@@ -148,6 +153,11 @@ void LoadConfig(AppConfig& config) {
     getBool("showSmoothedAimPoint", config.showSmoothedAimPoint);
     getInt("hotkeyKey", config.hotkeyKey);
 
+    getBool("trackerEnabled", config.trackerEnabled);
+    getFloat("trackerIou", config.trackerIou);
+    getInt("trackerMaxMissed", config.trackerMaxMissed);
+    getFloat("trackerSwitchRatio", config.trackerSwitchRatio);
+
     getBool("aimbot_humanized", config.aimbot_humanized);
     getBool("aimbot_relative", config.aimbot_relative);
     getInt("mouseInputMethod", config.mouseInputMethod);
@@ -188,6 +198,10 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.showRawAimPoint == b.showRawAimPoint
         && a.showSmoothedAimPoint == b.showSmoothedAimPoint
         && a.hotkeyKey == b.hotkeyKey
+        && a.trackerEnabled == b.trackerEnabled
+        && a.trackerIou == b.trackerIou
+        && a.trackerMaxMissed == b.trackerMaxMissed
+        && a.trackerSwitchRatio == b.trackerSwitchRatio
         && a.aimbot_humanized == b.aimbot_humanized
         && a.aimbot_relative == b.aimbot_relative
         && a.mouseInputMethod == b.mouseInputMethod

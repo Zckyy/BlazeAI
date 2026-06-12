@@ -11,6 +11,7 @@
 #include "cuda_process.h"
 #include "detector.h"
 #include "config_io.h"
+#include "tracker.h"
 #include "input.h"
 #include "makcu.h"
 
@@ -72,6 +73,7 @@ struct AimState {
     float errorY         = 0.0f;
     int   lastTargetX    = -1;
     int   lastTargetY    = -1;
+    int   lockedTrackId  = -1; // Track the aim is currently committed to (-1 = none)
 };
 
 // Captures a fresh full-screen still frame into the overlay for the color picker tool.
@@ -214,13 +216,20 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
 
     if (!g_config.autoAim || detections.empty() || !(GetAsyncKeyState(g_config.hotkeyKey) & 0x8000)) {
         s.wasAiming = false;
+        s.lockedTrackId = -1; // Releasing the hotkey releases the target lock
         return false;
     }
 
-    // Select target closest to screen center within the FOV boundary
+    // Select target closest to screen center within the FOV boundary, but prefer the
+    // track we are already locked onto: only switch when the rival is decisively
+    // closer (hysteresis), so detection jitter can't make the aim ping-pong between
+    // two targets at similar distances.
     float closestDist = 999999.0f;
     Detection bestTarget;
     bool foundTarget = false;
+    float lockedDist = 0.0f;
+    Detection lockedTarget;
+    bool foundLocked = false;
     const float halfFov = g_config.fovSize / 2.0f;
 
     int count = 0;
@@ -240,10 +249,26 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
                 bestTarget = det;
                 foundTarget = true;
             }
+            if (det.trackId != -1 && det.trackId == s.lockedTrackId) {
+                lockedDist = dist;
+                lockedTarget = det;
+                foundLocked = true;
+            }
         }
     }
 
-    if (!foundTarget) return true; // Hotkey held but no in-FOV target
+    if (!foundTarget) {
+        s.lockedTrackId = -1; // Locked track left the FOV or died
+        return true;          // Hotkey held but no in-FOV target
+    }
+
+    if (foundLocked && bestTarget.trackId != s.lockedTrackId) {
+        // Stick with the locked target unless the nearest rival is decisively closer.
+        if (closestDist >= lockedDist * g_config.trackerSwitchRatio) {
+            bestTarget = lockedTarget;
+        }
+    }
+    s.lockedTrackId = bestTarget.trackId; // -1 when the tracker is disabled (no lock)
 
     float targetCenterX = bestTarget.box.x + bestTarget.box.width / 2.0f;
     float targetCenterY = bestTarget.box.y + bestTarget.box.height / 2.0f;
@@ -453,6 +478,15 @@ void ProcessingThread(Overlay* overlay) {
             if (processed) {
                 const float centerX = capture.GetWidth() / 2.0f;
                 const float centerY = capture.GetHeight() / 2.0f;
+
+                // Assign stable cross-frame track IDs (and velocity) before sorting so
+                // the aim logic can stay locked to one target across frames.
+                static Tracker tracker;
+                if (g_config.trackerEnabled) {
+                    tracker.Update(localDetections, g_config.trackerIou, g_config.trackerMaxMissed);
+                } else {
+                    tracker.Reset();
+                }
 
                 // Sort detections by squared distance to crosshair so the closest target is first.
                 // (Squared distance preserves ordering and avoids per-comparison sqrt/pow.)

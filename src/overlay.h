@@ -55,6 +55,13 @@ struct AppConfig {
     bool showTargetVector = true;
     bool showRawAimPoint = true;
     bool showSmoothedAimPoint = true;
+    // Target tracking (frame-to-frame track IDs; see tracker.h)
+    bool trackerEnabled = true;
+    float trackerIou = 0.30f;        // Min IoU to match a detection to an existing track
+    int trackerMaxMissed = 8;        // Frames a lost track coasts before being dropped
+    float trackerSwitchRatio = 0.65f; // Switch targets only if the rival is < this fraction
+                                      // of the locked target's crosshair distance
+
     int hotkeyKey = VK_XBUTTON1;    // Mouse 4 by default
     bool isAimingActive = false;
 

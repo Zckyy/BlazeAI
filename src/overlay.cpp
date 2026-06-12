@@ -500,6 +500,32 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
     }
 
+    if (ImGui::CollapsingHeader("Target Tracking", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent();
+        ImGui::Checkbox("Enable Target Tracking", &config.trackerEnabled);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Gives detections stable IDs across frames so the aim sticks to one\ntarget instead of snapping to whichever is nearest each frame.");
+        }
+        if (config.trackerEnabled) {
+            ImGui::Indent();
+            ImGui::SliderFloat("Match Strictness (IoU)", &config.trackerIou, 0.05f, 0.7f, "%.2f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("How much a box must overlap its track to count as the same target.\nLower = tracks survive fast movement; higher = fewer identity mix-ups.");
+            }
+            ImGui::SliderInt("Lost-Target Patience (frames)", &config.trackerMaxMissed, 0, 30);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Frames a vanished target keeps coasting before its track is dropped.\nBridges single-frame detection dropouts.");
+            }
+            ImGui::SliderFloat("Switch Stickiness", &config.trackerSwitchRatio, 0.1f, 1.0f, "%.2f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("A rival target must be closer than this fraction of the locked target's\ndistance to steal the lock. 1.0 = always take the nearest (no stickiness).");
+            }
+            ImGui::Unindent();
+        }
+        ImGui::Unindent();
+        ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    }
+
     // 4. Mouse Input & Smoothing Tuning
     if (ImGui::CollapsingHeader("Mouse & Smoothing Tuning", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
@@ -756,7 +782,11 @@ void Overlay::DrawDetections(const std::vector<Detection>& detections, const App
 
         // Render confidence text and label
         char labelText[128];
-        sprintf_s(labelText, "%s %.2f", det.label.c_str(), det.confidence);
+        if (det.trackId != -1) {
+            sprintf_s(labelText, "#%d %s %.2f", det.trackId, det.label.c_str(), det.confidence);
+        } else {
+            sprintf_s(labelText, "%s %.2f", det.label.c_str(), det.confidence);
+        }
         
         ImVec2 textSize = ImGui::CalcTextSize(labelText);
         ImVec2 labelRectMin(pMin.x, pMin.y - textSize.y - 4.0f);

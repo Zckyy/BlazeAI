@@ -10,6 +10,9 @@ struct Detection {
     float confidence;
     int classId;
     std::string label;
+    int trackId = -1;   // Stable cross-frame ID from the Tracker (-1 = untracked)
+    float vx = 0.0f;    // Tracker velocity estimate, px/s (0 when untracked)
+    float vy = 0.0f;
 };
 
 class Detector {
