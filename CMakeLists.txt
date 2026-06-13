@@ -28,6 +28,17 @@ if(NOT onnxruntime_FOUND)
     set(ONNXRUNTIME_LIBRARIES "" CACHE FILEPATH "Path to onnxruntime.lib")
 endif()
 
+# ViGEmClient (virtual Xbox 360 controller backend). Not in vcpkg; vendored under
+# third_party/vigem the same way as the optional TensorRT DLLs (see that folder's
+# README for how to fetch the nefarius.ViGEm.Client NuGet package contents).
+set(VIGEM_DIR "${CMAKE_SOURCE_DIR}/third_party/vigem")
+if(EXISTS "${VIGEM_DIR}/include/ViGEm/Client.h")
+    set(VIGEM_FOUND TRUE)
+else()
+    set(VIGEM_FOUND FALSE)
+    message(STATUS "ViGEmClient SDK not found in third_party/vigem - building without virtual-controller support.")
+endif()
+
 # Fetch Dear ImGui
 include(FetchContent)
 FetchContent_Declare(
@@ -115,6 +126,12 @@ target_link_libraries(ScreenAnalysisTool PRIVATE
     d3dcompiler
     dwmapi
 )
+
+if(VIGEM_FOUND)
+    target_include_directories(ScreenAnalysisTool PRIVATE "${VIGEM_DIR}/include")
+    target_link_libraries(ScreenAnalysisTool PRIVATE "${VIGEM_DIR}/lib/x64/ViGEmClient.lib" setupapi xinput9_1_0)
+    target_compile_definitions(ScreenAnalysisTool PRIVATE BLAZE_HAVE_VIGEM=1 UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
+endif()
 
 # System libs for Windows
 target_link_libraries(ScreenAnalysisTool PRIVATE

@@ -14,6 +14,7 @@
 #include "tracker.h"
 #include "input.h"
 #include "makcu.h"
+#include "vigem_input.h"
 
 // Threading and Synchronization
 std::atomic<bool> g_running{true};
@@ -56,6 +57,11 @@ void MoveMouseRelative(int dx, int dy) {
         return;
     }
 
+    if (g_config.mouseInputMethod == MOUSE_VIGEM && g_vigem.Available()) {
+        g_vigem.MoveRelative(dx, dy, g_config.vigemStickScale);
+        return;
+    }
+
     INPUT input = { 0 };
     input.type = INPUT_MOUSE;
     input.mi.dx = static_cast<LONG>(dx);
@@ -73,6 +79,11 @@ void SetMouseButton(bool down) {
 
     if (g_config.mouseInputMethod == MOUSE_MAKCU && g_makcu.IsConnected()) {
         g_makcu.Click(down);
+        return;
+    }
+
+    if (g_config.mouseInputMethod == MOUSE_VIGEM && g_vigem.Available()) {
+        g_vigem.Click(down);
         return;
     }
 
@@ -267,7 +278,10 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
                            float centerX, float centerY, AimState& s) {
     g_config.aimDebugTargetActive = false;
 
-    if (!g_config.autoAim || detections.empty() || !(GetAsyncKeyState(g_config.hotkeyKey) & 0x8000)) {
+    const bool hotkeyHeld = (GetAsyncKeyState(g_config.hotkeyKey) & 0x8000)
+        || (g_config.mouseInputMethod == MOUSE_VIGEM && g_vigem.LeftTriggerHeld());
+
+    if (!g_config.autoAim || detections.empty() || !hotkeyHeld) {
         s.wasAiming = false;
         s.lockedTrackId = -1; // Releasing the hotkey releases the target lock
         if (g_config.triggerBotEnabled) UpdateTriggerBot(s, false);

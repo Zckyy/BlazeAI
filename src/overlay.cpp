@@ -1,5 +1,6 @@
 #include "overlay.h"
 #include "makcu.h"
+#include "vigem_input.h"
 #include <filesystem>
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
@@ -583,7 +584,7 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
         if (config.aimbot_relative) {
             ImGui::SliderFloat("Relative Sensitivity Scale", &config.aimbot_sensitivity, 0.1f, 5.0f, "%.2f");
 
-            const char* methodNames[] = { "SendInput", "NtUserInjectMouseInput (win32u)", "MAKCU (Serial)" };
+            const char* methodNames[] = { "SendInput", "NtUserInjectMouseInput (win32u)", "MAKCU (Serial)", "Virtual Controller (ViGEm)" };
             int method = config.mouseInputMethod;
             if (ImGui::Combo("Mouse Injection Method", &method, methodNames, IM_ARRAYSIZE(methodNames))) {
                 config.mouseInputMethod = method;
@@ -638,8 +639,41 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
 
                 ImGui::Unindent();
             }
+
+            // ViGEm virtual-controller backend configuration.
+            if (config.mouseInputMethod == MOUSE_VIGEM) {
+                ImGui::Separator();
+                ImGui::TextUnformatted("Virtual Controller (ViGEmBus)");
+                ImGui::Indent();
+
+                ImGui::SliderFloat("Stick Scale (units/px)", &config.vigemStickScale, 10.0f, 1000.0f, "%.0f");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("How hard the virtual right stick is pushed per pixel of aim error.\nTune in-game; too high overshoots, too low feels sluggish.");
+                }
+
+                if (g_vigem.Available()) {
+                    ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Virtual X360 pad active");
+                    if (g_vigem.HasRealPad()) {
+                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Real pad found - passing through inputs");
+                    } else {
+                        ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f),
+                                           "No real pad detected - virtual pad will only output aim assist.\nConnect your controller before enabling this mode.");
+                    }
+                    if (ImGui::Button("Test Stick Movement")) {
+                        g_vigem.MoveRelative(50, 0, config.vigemStickScale);
+                    }
+                } else {
+                    ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f),
+                                       "ViGEmBus not found - install the driver from\nhttps://github.com/ViGEm/ViGEmBus/releases");
+                }
+
+                ImGui::TextWrapped("Hide your physical controller's HID with HidHide so the game "
+                                    "binds to this virtual pad instead.");
+
+                ImGui::Unindent();
+            }
         }
-        
+
         ImGui::Separator();
         
         ImGui::Checkbox("Enable Humanized Smoothing", &config.aimbot_humanized);
