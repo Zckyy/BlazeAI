@@ -88,6 +88,11 @@ void SaveConfig(const AppConfig& config) {
     f << "aimbot_curve_strength=" << config.aimbot_curve_strength << "\n";
     f << "aimbot_ease_in=" << config.aimbot_ease_in << "\n";
     f << "aimbot_ease_out=" << config.aimbot_ease_out << "\n";
+
+    f << "triggerBotEnabled=" << (config.triggerBotEnabled ? 1 : 0) << "\n";
+    f << "triggerBotRadius=" << config.triggerBotRadius << "\n";
+    f << "triggerBotHoldMs=" << config.triggerBotHoldMs << "\n";
+    f << "triggerBotCooldownMs=" << config.triggerBotCooldownMs << "\n";
 }
 
 // --- Load -------------------------------------------------------------------
@@ -173,6 +178,11 @@ void LoadConfig(AppConfig& config) {
     getFloat("aimbot_curve_strength", config.aimbot_curve_strength);
     getFloat("aimbot_ease_in", config.aimbot_ease_in);
     getFloat("aimbot_ease_out", config.aimbot_ease_out);
+
+    getBool("triggerBotEnabled", config.triggerBotEnabled);
+    getFloat("triggerBotRadius", config.triggerBotRadius);
+    getInt("triggerBotHoldMs", config.triggerBotHoldMs);
+    getInt("triggerBotCooldownMs", config.triggerBotCooldownMs);
 }
 
 // --- Change detection -------------------------------------------------------
@@ -219,5 +229,9 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.aimbot_jitter == b.aimbot_jitter
         && a.aimbot_curve_strength == b.aimbot_curve_strength
         && a.aimbot_ease_in == b.aimbot_ease_in
-        && a.aimbot_ease_out == b.aimbot_ease_out;
+        && a.aimbot_ease_out == b.aimbot_ease_out
+        && a.triggerBotEnabled == b.triggerBotEnabled
+        && a.triggerBotRadius == b.triggerBotRadius
+        && a.triggerBotHoldMs == b.triggerBotHoldMs
+        && a.triggerBotCooldownMs == b.triggerBotCooldownMs;
 }
