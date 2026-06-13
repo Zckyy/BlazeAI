@@ -78,6 +78,8 @@ struct AppConfig {
     bool aimbot_relative = true;     // Relative mouse movement (Raw input) vs absolute
     int mouseInputMethod = MOUSE_SENDINPUT; // How relative moves are injected (see MouseInputMethod)
     float vigemStickScale = 150.0f;  // Stick units per pixel of dx/dy for MOUSE_VIGEM
+    bool vigemAlwaysAim = false;     // MOUSE_VIGEM only: skip the hotkey/trigger check and
+                                      // aim whenever a target is detected.
     float aimbot_sensitivity = 1.0f; // Scale factor for relative movement
     float aimbot_smooth = 2.0f;
     float aimbot_jitter = 0.0f;

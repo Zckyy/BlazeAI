@@ -81,6 +81,7 @@ void SaveConfig(const AppConfig& config) {
     f << "aimbot_relative=" << (config.aimbot_relative ? 1 : 0) << "\n";
     f << "mouseInputMethod=" << config.mouseInputMethod << "\n";
     f << "vigemStickScale=" << config.vigemStickScale << "\n";
+    f << "vigemAlwaysAim=" << (config.vigemAlwaysAim ? 1 : 0) << "\n";
     f << "aimbot_sensitivity=" << config.aimbot_sensitivity << "\n";
     f << "aimbot_smooth=" << config.aimbot_smooth << "\n";
     f << "aimbot_jitter=" << config.aimbot_jitter << "\n";
@@ -165,6 +166,7 @@ void LoadConfig(AppConfig& config) {
     getBool("aimbot_relative", config.aimbot_relative);
     getInt("mouseInputMethod", config.mouseInputMethod);
     getFloat("vigemStickScale", config.vigemStickScale);
+    getBool("vigemAlwaysAim", config.vigemAlwaysAim);
     getFloat("aimbot_sensitivity", config.aimbot_sensitivity);
     getFloat("aimbot_smooth", config.aimbot_smooth);
     getFloat("aimbot_jitter", config.aimbot_jitter);
@@ -211,6 +213,7 @@ bool SettingsEqual(const AppConfig& a, const AppConfig& b) {
         && a.aimbot_relative == b.aimbot_relative
         && a.mouseInputMethod == b.mouseInputMethod
         && a.vigemStickScale == b.vigemStickScale
+        && a.vigemAlwaysAim == b.vigemAlwaysAim
         && a.aimbot_sensitivity == b.aimbot_sensitivity
         && a.aimbot_smooth == b.aimbot_smooth
         && a.aimbot_jitter == b.aimbot_jitter

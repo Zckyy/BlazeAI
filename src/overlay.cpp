@@ -651,6 +651,11 @@ void Overlay::DrawConfigPanel(AppConfig& config) {
                     ImGui::SetTooltip("How hard the virtual right stick is pushed per pixel of aim error.\nTune in-game; too high overshoots, too low feels sluggish.");
                 }
 
+                ImGui::Checkbox("Always Aim (no trigger needed)", &config.vigemAlwaysAim);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Aim assist activates as soon as a target is detected,\nwithout needing to hold the left trigger or hotkey.");
+                }
+
                 if (g_vigem.Available()) {
                     ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Virtual X360 pad active");
                     if (g_vigem.HasRealPad()) {

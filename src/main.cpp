@@ -279,7 +279,8 @@ static bool ApplyAimAssist(const std::vector<Detection>& detections,
     g_config.aimDebugTargetActive = false;
 
     const bool hotkeyHeld = (GetAsyncKeyState(g_config.hotkeyKey) & 0x8000)
-        || (g_config.mouseInputMethod == MOUSE_VIGEM && g_vigem.LeftTriggerHeld());
+        || (g_config.mouseInputMethod == MOUSE_VIGEM
+            && (g_vigem.LeftTriggerHeld() || g_config.vigemAlwaysAim));
 
     if (!g_config.autoAim || detections.empty() || !hotkeyHeld) {
         s.wasAiming = false;
